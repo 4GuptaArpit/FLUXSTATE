@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing & Hardhat
+coverage/
+coverage.json
+typechain/
+typechain-types/
+contracts/cache/
+contracts/artifacts/
+
+# Next.js build output
+.next/
+out/
+build/
+dist/
+
+# Environment files (NEVER commit secrets or private keys)
+.env
+.env*.local
+.env.production
+.env.staging
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDE & OS files
+.DS_Store
+*.pem
+Thumbs.db
+.vscode/
+.idea/
