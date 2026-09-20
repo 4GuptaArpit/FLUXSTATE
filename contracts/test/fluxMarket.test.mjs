@@ -1,22 +1,21 @@
 import assert from "node:assert/strict";
-import { test, before } from "node:test";
-import { ethers } from "ethers";
+import { test } from "node:test";
 import fs from "node:fs";
 
-// Read compiled contract artifacts
 const marketArtifact = JSON.parse(fs.readFileSync("./artifacts/src/FluxMarket.sol/FluxMarket.json", "utf8"));
 const oracleArtifact = JSON.parse(fs.readFileSync("./artifacts/src/MockPriceOracle.sol/MockPriceOracle.json", "utf8"));
 
-test("FluxMarket - Parallel Micro-Prediction Lifecycle", async (t) => {
-  // Setup standalone ethers provider or mock wallet for testing logic
-  assert.ok(marketArtifact.abi.length > 0, "FluxMarket ABI compiled successfully");
-  assert.ok(oracleArtifact.abi.length > 0, "MockPriceOracle ABI compiled successfully");
+test("FluxMarket - Track 01 Block-by-Block Funding & Micro-Perp ABI Verification", async (t) => {
+  assert.ok(marketArtifact.abi.length > 0, "FluxMarket ABI compiled");
+  assert.ok(oracleArtifact.abi.length > 0, "MockPriceOracle ABI compiled");
   
-  // Verify method presence
-  const marketFunctions = marketArtifact.abi.filter(item => item.type === "function").map(f => f.name);
-  assert.ok(marketFunctions.includes("startRound"), "startRound is present");
-  assert.ok(marketFunctions.includes("placeBet"), "placeBet is present");
-  assert.ok(marketFunctions.includes("lockRound"), "lockRound is present");
-  assert.ok(marketFunctions.includes("resolveRound"), "resolveRound is present");
-  assert.ok(marketFunctions.includes("claimReward"), "claimReward is present");
+  const functionNames = marketArtifact.abi.filter(i => i.type === "function").map(f => f.name);
+  
+  // Verify Track 01 specific methods
+  assert.ok(functionNames.includes("calculateBlockFundingRate"), "calculateBlockFundingRate is implemented");
+  assert.ok(functionNames.includes("openPosition"), "openPosition is implemented");
+  assert.ok(functionNames.includes("startRound"), "startRound is implemented");
+  assert.ok(functionNames.includes("lockRound"), "lockRound is implemented");
+  assert.ok(functionNames.includes("resolveRound"), "resolveRound is implemented");
+  assert.ok(functionNames.includes("claimPayout"), "claimPayout is implemented");
 });

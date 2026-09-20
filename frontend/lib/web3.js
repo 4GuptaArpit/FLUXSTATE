@@ -36,14 +36,21 @@ export const FLUX_MARKET_ABI = [
       { internalType: "uint256", name: "epochId", type: "uint256" },
       { internalType: "uint8", name: "direction", type: "uint8" }
     ],
-    name: "placeBet",
+    name: "openPosition",
     outputs: [],
     stateMutability: "payable",
     type: "function"
   },
   {
     inputs: [{ internalType: "uint256", name: "epochId", type: "uint256" }],
-    name: "claimReward",
+    name: "calculateBlockFundingRate",
+    outputs: [{ internalType: "int256", name: "", type: "int256" }],
+    stateMutability: "view",
+    type: "function"
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "epochId", type: "uint256" }],
+    name: "claimPayout",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function"
@@ -64,8 +71,9 @@ export const FLUX_MARKET_ABI = [
       { internalType: "uint256", name: "closeTimestamp", type: "uint256" },
       { internalType: "int64", name: "lockPrice", type: "int64" },
       { internalType: "int64", name: "closePrice", type: "int64" },
-      { internalType: "uint256", name: "totalUpAmount", type: "uint256" },
-      { internalType: "uint256", name: "totalDownAmount", type: "uint256" },
+      { internalType: "uint256", name: "totalLongAmount", type: "uint256" },
+      { internalType: "uint256", name: "totalShortAmount", type: "uint256" },
+      { internalType: "int256", name: "blockFundingRateBps", type: "int256" },
       { internalType: "bool", name: "resolved", type: "bool" },
       { internalType: "uint8", name: "winningDirection", type: "uint8" }
     ],
