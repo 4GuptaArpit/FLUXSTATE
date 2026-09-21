@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test, describe } from "node:test";
+import { ethers } from "ethers";
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const marketArtifact = JSON.parse(fs.readFileSync("./artifacts/src/FluxMarket.sol/FluxMarket.json", "utf8"));
-const oracleArtifact = JSON.parse(fs.readFileSync("./artifacts/src/MockPriceOracle.sol/MockPriceOracle.json", "utf8"));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const marketArtifactPath = path.resolve(__dirname, "../artifacts/src/FluxMarket.sol/FluxMarket.json");
+const oracleArtifactPath = path.resolve(__dirname, "../artifacts/src/MockPriceOracle.sol/MockPriceOracle.json");
+const marketSrcPath = path.resolve(__dirname, "../src/FluxMarket.sol");
+
+const marketArtifact = JSON.parse(fs.readFileSync(marketArtifactPath, "utf8"));
+const oracleArtifact = JSON.parse(fs.readFileSync(oracleArtifactPath, "utf8"));
+const marketSrc = fs.readFileSync(marketSrcPath, "utf8");
+const src = marketSrc;
 
 test("FluxMarket - Track 01 Block-by-Block Funding & Micro-Perp ABI Verification", async (t) => {
   assert.ok(marketArtifact.abi.length > 0, "FluxMarket ABI compiled");
