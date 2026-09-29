@@ -448,6 +448,16 @@ export default function FluxStateTerminal() {
 
         {/* Wallet & Judge 1-Click Demo Actions (P2) */}
         <div className="flex items-center space-x-3">
+          
+          {/* Quick-Launch 500-Order Storm Engine for Judges */}
+          <button
+            onClick={() => setActiveTab("telemetry")}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-mono text-xs font-bold text-cyan-300 bg-cyan-950/70 border border-cyan-500/40 hover:bg-cyan-900/60 transition-all active:scale-95 neon-glow-cyan"
+          >
+            <Zap className="w-3.5 h-3.5 text-cyan-400 animate-bounce" />
+            <span>⚡ Test 500 Parallel Orders</span>
+          </button>
+
           {!walletAddress && (
             <button
               onClick={handleEnableDemoMode}
