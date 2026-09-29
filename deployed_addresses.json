@@ -1,0 +1,24 @@
+{
+  "network": "monadTestnet",
+  "chainId": 10143,
+  "oracle": "0x9438B88C0BcF1dD58AA0F86D5C1a7761b5D39AAC",
+  "markets": {
+    "MON/USD": {
+      "marketAddress": "0xca45eee4bEc9B4dE2fFCD82C6d36eFB524A02176",
+      "feedId": "0x4d4f4e2f55534400000000000000000000000000000000000000000000000000",
+      "symbol": "MON/USD"
+    },
+    "ETH/USD": {
+      "marketAddress": "0x786e11A957677c8A17F08Db2cA75C7ABDA127E6C",
+      "feedId": "0x4554482f55534400000000000000000000000000000000000000000000000000",
+      "symbol": "ETH/USD"
+    },
+    "BTC/USD": {
+      "marketAddress": "0xaaeE42E6988C5A90Fe3Cd3FE91d23efC15e7Fe17",
+      "feedId": "0x4254432f55534400000000000000000000000000000000000000000000000000",
+      "symbol": "BTC/USD"
+    }
+  },
+  "roundDuration": 10,
+  "timestamp": "2026-09-29T14:49:02.143Z"
+}

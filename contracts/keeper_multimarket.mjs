@@ -35,14 +35,14 @@ async function runMultiKeeper() {
 
   let deployedInfo;
   try {
-    deployedInfo = JSON.parse(fs.readFileSync("./deployed_addresses.json", "utf8"));
+    deployedInfo = JSON.parse(fs.readFileSync("../deployed_addresses.json", "utf8"));
   } catch (err) {
     console.error("Could not read deployed_addresses.json. Run deploy first!");
     return;
   }
 
-  const oracleArtifact = JSON.parse(fs.readFileSync("./contracts/artifacts/src/MockPriceOracle.sol/MockPriceOracle.json", "utf8"));
-  const marketArtifact = JSON.parse(fs.readFileSync("./contracts/artifacts/src/FluxMarket.sol/FluxMarket.json", "utf8"));
+  const oracleArtifact = JSON.parse(fs.readFileSync("./artifacts/src/MockPriceOracle.sol/MockPriceOracle.json", "utf8"));
+  const marketArtifact = JSON.parse(fs.readFileSync("./artifacts/src/FluxMarket.sol/FluxMarket.json", "utf8"));
 
   const oracle = new ethers.Contract(deployedInfo.oracle, oracleArtifact.abi, wallet);
   const markets = Object.entries(deployedInfo.markets || {}).map(([sym, data]) => ({
@@ -68,7 +68,9 @@ async function runMultiKeeper() {
 
   while (true) {
     console.log("\n--- Triggering parallel round starts across all markets ---");
-    await Promise.all(markets.map(m => stepMarket(m)));
+    for (const m of markets) {
+      await stepMarket(m);
+    }
     await new Promise(r => setTimeout(r, 10000));
   }
 }

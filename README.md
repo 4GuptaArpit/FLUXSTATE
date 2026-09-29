@@ -12,6 +12,18 @@
 
 ---
 
+## 🔗 Live Verified Contracts on Monad Testnet (Chain ID: 10143)
+
+| Contract | Target Market | Verified Onchain Address | Block Explorer |
+| :--- | :--- | :--- | :--- |
+| **FluxMarket [MON/USD]** | MON Micro-Perps | `0xca45eee4bEc9B4dE2fFCD82C6d36eFB524A02176` | [View on MonadScan ↗](https://testnet.monadscan.com/address/0xca45eee4bEc9B4dE2fFCD82C6d36eFB524A02176) |
+| **FluxMarket [ETH/USD]** | ETH Micro-Perps | `0x786e11A957677c8A17F08Db2cA75C7ABDA127E6C` | [View on MonadScan ↗](https://testnet.monadscan.com/address/0x786e11A957677c8A17F08Db2cA75C7ABDA127E6C) |
+| **FluxMarket [BTC/USD]** | BTC Micro-Perps | `0xaaeE42E6988C5A90Fe3Cd3FE91d23efC15e7Fe17` | [View on MonadScan ↗](https://testnet.monadscan.com/address/0xaaeE42E6988C5A90Fe3Cd3FE91d23efC15e7Fe17) |
+| **Shared Pyth Oracle** | Multi-Feed Oracle | `0x9438B88C0BcF1dD58AA0F86D5C1a7761b5D39AAC` | [View on MonadScan ↗](https://testnet.monadscan.com/address/0x9438B88C0BcF1dD58AA0F86D5C1a7761b5D39AAC) |
+| **Deployer / Keeper** | Protocol Owner | `0xf16339204932583020D9c5e00bdED8928B0def15` | [View on MonadScan ↗](https://testnet.monadscan.com/address/0xf16339204932583020D9c5e00bdED8928B0def15) |
+
+---
+
 ## 🎯 The Problem Monad Asked To Solve
 In traditional EVM environments (Ethereum L1, Arbitrum, Optimism), perpetual funding rates can only update every **1 hour or 8 hours**. Updating funding every block is mathematically impossible because:
 - **Block Latency:** 2s to 12s blocks cannot reflect micro-second market movements.
