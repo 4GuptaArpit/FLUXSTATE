@@ -19,7 +19,7 @@ export const monadTestnet = {
   blockExplorers: {
     default: {
       name: "MonadScan",
-      url: "https://testnet.monadexplorer.com",
+      url: "https://testnet.monadscan.com",
     },
   },
   testnet: true,
@@ -102,4 +102,30 @@ export function getWalletClient() {
     });
   }
   return null;
+}
+
+export async function addMonadTestnetToWallet() {
+  if (typeof window !== "undefined" && window.ethereum) {
+    try {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [{
+          chainId: "0x279f", // 10143 in hex
+          chainName: "Monad Testnet",
+          nativeCurrency: {
+            name: "Monad",
+            symbol: "MON",
+            decimals: 18,
+          },
+          rpcUrls: ["https://testnet-rpc.monad.xyz"],
+          blockExplorerUrls: ["https://testnet.monadscan.com"],
+        }],
+      });
+      return true;
+    } catch (err) {
+      console.error("Failed to add Monad Testnet:", err);
+      return false;
+    }
+  }
+  return false;
 }

@@ -29,7 +29,7 @@ import {
   VolumeX,
   ExternalLink
 } from "lucide-react";
-import { getWalletClient, monadTestnet, FLUX_MARKET_ABI, CONTRACT_ADDRESSES } from "../lib/web3";
+import { getWalletClient, monadTestnet, FLUX_MARKET_ABI, CONTRACT_ADDRESSES, addMonadTestnetToWallet } from "../lib/web3";
 import { parseEther } from "viem";
 import confetti from "canvas-confetti";
 
@@ -95,7 +95,7 @@ export default function FluxStateTerminal() {
   const [betAmount, setBetAmount] = useState("0.5");
   const [leverage, setLeverage] = useState("5x");
   const leverageNum = parseInt(leverage) || 5;
-  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(true);
   const [demoBalance, setDemoBalance] = useState(100);
 
   // Pools state per market
@@ -502,22 +502,25 @@ export default function FluxStateTerminal() {
             <span>⚡ Test 500 Parallel Orders</span>
           </button>
 
-          {!walletAddress && (
-            <button
-              onClick={handleEnableDemoMode}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-mono text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-500/40 hover:bg-amber-900/60 transition-all active:scale-95"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Judge Quick-Test</span>
-            </button>
-          )}
-
-          {isDemoMode && (
-            <div className="px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              <span>DEMO: {demoBalance} MON</span>
+          {isDemoMode && !walletAddress && (
+            <div className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-950/90 to-purple-950/90 border border-amber-500/50 text-amber-300 text-xs font-mono font-bold flex items-center gap-2 shadow-lg shadow-amber-500/20">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span>⚡ JUDGE TOUR: {demoBalance.toFixed(1)} MON PILOT</span>
             </div>
           )}
+
+          <button
+            onClick={async () => {
+              if (cyberAudio && cyberAudio.playTick) cyberAudio.playTick();
+              const added = await addMonadTestnetToWallet();
+              if (added) handleConnectWallet();
+            }}
+            title="Add Monad Testnet (Chain ID 10143) to MetaMask"
+            className="hidden lg:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl font-mono text-xs font-bold text-purple-300 bg-purple-950/60 border border-purple-500/30 hover:border-cyan-400 hover:text-white transition-all active:scale-95"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Add Monad RPC</span>
+          </button>
 
           <button
             onClick={handleConnectWallet}
