@@ -89,7 +89,9 @@ export default function FluxStateTerminal() {
 
   const [secondsRemaining, setSecondsRemaining] = useState(7);
   const [epochId, setEpochId] = useState(1042);
-  const [betAmount, setBetAmount] = useState("5");
+  const [betAmount, setBetAmount] = useState("0.5");
+  const [leverage, setLeverage] = useState("5x");
+  const leverageNum = parseInt(leverage) || 5;
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [demoBalance, setDemoBalance] = useState(100);
 
@@ -105,6 +107,7 @@ export default function FluxStateTerminal() {
   const poolShort = currentPool.short;
 
   const [walletAddress, setWalletAddress] = useState(null);
+  const [walletBalance, setWalletBalance] = useState("4.92");
   const [txToast, setTxToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("terminal"); // terminal | telemetry | comparison
@@ -729,19 +732,28 @@ export default function FluxStateTerminal() {
                       POSITION CONTROL
                     </h3>
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-950 text-cyan-300 border border-cyan-500/30">
-                    PARALLEL SLOTS
-                  </span>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-950 text-cyan-300 border border-cyan-500/30 font-bold">
+                      PARALLEL CORE #S{((Math.floor((Number(betAmount) || 1) * 100)) + leverageNum * 7) % 64}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Dynamic Liquidity Battle Bar */}
-                <div className="mt-6">
-                  <div className="flex justify-between text-xs font-mono font-bold mb-2">
-                    <span className="text-emerald-400">LONGS: {poolLong} ({multiplierLong})</span>
-                    <span className="text-rose-400">SHORTS: {poolShort} ({multiplierShort})</span>
+                {/* Dynamic Liquidity Battle Bar & Skew */}
+                <div className="mt-5">
+                  <div className="flex justify-between items-center text-xs font-mono font-bold mb-2">
+                    <span className="text-emerald-400 flex items-center">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-1.5 shadow-[0_0_8px_#10b981]" />
+                      LONGS: {poolLong} ({multiplierLong})
+                    </span>
+                    <span className="text-rose-400 flex items-center">
+                      SHORTS: {poolShort} ({multiplierShort})
+                      <span className="w-2 h-2 rounded-full bg-rose-400 inline-block ml-1.5 shadow-[0_0_8px_#f43f5e]" />
+                    </span>
                   </div>
 
-                  <div className="h-4 w-full bg-[#08021C] rounded-xl overflow-hidden p-0.5 flex border border-purple-900/40">
+                  <div className="h-4 w-full bg-[#08021C] rounded-xl overflow-hidden p-0.5 flex border border-purple-900/40 relative">
                     <div 
                       style={{ width: ((poolLong / (poolLong + poolShort || 1)) * 100) + "%" }} 
                       className="bg-gradient-to-r from-emerald-600 to-teal-400 h-full rounded-l-lg transition-all duration-500 shadow-[0_0_10px_#10b981]"
@@ -751,58 +763,188 @@ export default function FluxStateTerminal() {
                       className="bg-gradient-to-r from-rose-600 to-red-400 h-full rounded-r-lg transition-all duration-500 shadow-[0_0_10px_#f43f5e]"
                     />
                   </div>
+
+                  <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 mt-1.5 px-0.5">
+                    <span>Pool Weight: {((poolLong / (poolLong + poolShort || 1)) * 100).toFixed(0)}% Long</span>
+                    <span className="text-cyan-400 font-bold">Block Funding: +0.012%/s</span>
+                    <span>{((poolShort / (poolLong + poolShort || 1)) * 100).toFixed(0)}% Short</span>
+                  </div>
                 </div>
 
-                {/* Margin Amount Selector */}
-                <div className="mt-6">
-                  <label className="text-[11px] font-mono text-purple-300 uppercase tracking-wider">
-                    MARGIN ALLOCATION (MON)
-                  </label>
-                  <div className="grid grid-cols-4 gap-2 mt-2">
-                    {["1", "5", "25", "100"].map((amt) => (
+                {/* Leverage Multiplier Selector (1x - 50x) */}
+                <div className="mt-5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[11px] font-mono text-purple-300 uppercase tracking-wider flex items-center">
+                      <Crosshair className="w-3.5 h-3.5 mr-1.5 text-cyan-400" />
+                      LEVERAGE MULTIPLIER (ISOLATED)
+                    </label>
+                    <span className="text-[10px] font-mono text-cyan-400 font-bold">
+                      {leverage} LEVERAGE ACTIVE
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-6 gap-1.5 mt-2">
+                    {["1x", "2x", "5x", "10x", "25x", "50x"].map((lev) => {
+                      const isActive = leverage === lev;
+                      const isHighRisk = lev === "25x" || lev === "50x";
+                      return (
+                        <button
+                          key={lev}
+                          onClick={() => {
+                            setLeverage(lev);
+                            if (cyberAudio && cyberAudio.playTick) cyberAudio.playTick();
+                          }}
+                          className={"py-2.5 text-xs font-mono font-black rounded-xl border transition-all active:scale-95 flex flex-col items-center justify-center relative " + (
+                            isActive 
+                              ? "bg-gradient-to-r from-purple-600 to-indigo-600 border-cyan-400 text-white shadow-[0_0_15px_rgba(6,182,212,0.45)] ring-1 ring-cyan-400/50" 
+                              : "bg-[#0C0726]/70 border-purple-900/40 text-slate-300 hover:border-purple-500/50 hover:text-white"
+                          )}
+                        >
+                          <span>{lev}</span>
+                          {isHighRisk && (
+                            <span className="text-[8px] text-amber-400/90 font-bold leading-none mt-0.5">MAX</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Micro-Margin Allocation Presets & Custom Input */}
+                <div className="mt-5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[11px] font-mono text-purple-300 uppercase tracking-wider">
+                      MARGIN ALLOCATION (MON)
+                    </label>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Balance: <strong className="text-white">{isDemoMode ? demoBalance.toFixed(1) : (walletBalance ? parseFloat(walletBalance).toFixed(2) : "0.00")} MON</strong>
+                    </span>
+                  </div>
+
+                  {/* Micro Quick Pills */}
+                  <div className="grid grid-cols-5 gap-1.5 mt-2">
+                    {["0.05", "0.1", "0.5", "1.0", "2.5"].map((amt) => (
                       <button
                         key={amt}
-                        onClick={() => setBetAmount(amt)}
-                        className={"py-3 text-sm font-mono font-black rounded-xl border transition-all active:scale-95 " + (
+                        onClick={() => {
+                          setBetAmount(amt);
+                          if (cyberAudio && cyberAudio.playTick) cyberAudio.playTick();
+                        }}
+                        className={"py-2 text-xs font-mono font-black rounded-xl border transition-all active:scale-95 " + (
                           betAmount === amt 
-                            ? "bg-purple-600/90 border-cyan-400 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]" 
-                            : "bg-[#0C0726]/60 border-purple-900/40 text-slate-300 hover:border-purple-500/50"
+                            ? "bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)]" 
+                            : "bg-[#0C0726]/60 border-purple-900/40 text-slate-400 hover:border-purple-500/50 hover:text-slate-200"
                         )}
                       >
                         {amt}
                       </button>
                     ))}
                   </div>
+
+                  {/* Custom Input & MAX Button */}
+                  <div className="flex items-center space-x-2 mt-2.5">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={betAmount}
+                        onChange={(e) => setBetAmount(e.target.value)}
+                        placeholder="0.5"
+                        className="w-full bg-[#08021C] border border-purple-900/60 focus:border-cyan-400 focus:outline-none rounded-xl py-2 px-3 text-xs font-mono text-white font-bold tracking-wider"
+                      />
+                      <span className="absolute right-3 top-2 text-xs font-mono text-purple-400 font-bold">MON</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (cyberAudio && cyberAudio.playTick) cyberAudio.playTick();
+                        const maxVal = isDemoMode 
+                          ? (demoBalance > 0 ? (demoBalance * 0.5).toFixed(2) : "1.0") 
+                          : (walletBalance ? Math.max(0.05, (parseFloat(walletBalance) - 0.05)).toFixed(2) : "1.0");
+                        setBetAmount(maxVal);
+                      }}
+                      className="px-3.5 py-2 bg-purple-950/80 hover:bg-purple-900/80 border border-purple-500/40 text-cyan-300 font-mono text-xs font-black rounded-xl active:scale-95 transition-all shadow-sm"
+                    >
+                      MAX
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dynamic Position Preview HUD */}
+                <div className="mt-5 bg-[#07011c]/90 border border-purple-500/30 rounded-2xl p-3.5 space-y-2 font-mono text-[11px] shadow-inner">
+                  <div className="flex justify-between items-center text-slate-400 border-b border-purple-900/30 pb-2">
+                    <span className="flex items-center space-x-1.5 text-purple-300 font-bold">
+                      <Crosshair className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>NOTIONAL POSITION</span>
+                    </span>
+                    <span className="text-white font-black text-xs">
+                      ${((Number(betAmount) || 0) * (prices[activeMarketKey] || 4.28) * leverageNum).toFixed(2)} USD
+                      <span className="text-cyan-400 ml-1.5 font-bold">({((Number(betAmount) || 0) * leverageNum).toFixed(2)} MON)</span>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-0.5">
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>Liq. Distance:</span>
+                      <span className="text-amber-400 font-bold">
+                        ±{(100 / leverageNum * 0.9).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>Storage Partition:</span>
+                      <span className="text-emerald-400 font-bold flex items-center">
+                        <Cpu className="w-3 h-3 mr-1" />
+                        Slot #S{((Math.floor((Number(betAmount) || 1) * 100)) + leverageNum * 7) % 64}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>Network Latency:</span>
+                      <span className="text-cyan-300 font-bold">7.2ms (Zero Lock)</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>Oracle Slippage:</span>
+                      <span className="text-slate-300 font-bold">0.00% (Pyth L1)</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Position Action Buttons */}
-                <div className="mt-8 space-y-4">
+                <div className="mt-6 space-y-3">
                   <button
                     disabled={isSubmitting}
                     onClick={() => handleOpenPosition("LONG")}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 font-mono font-black text-lg flex items-center justify-between px-6 neon-glow-emerald active:scale-95 transition-all disabled:opacity-50"
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 font-mono font-black text-lg flex items-center justify-between px-6 neon-glow-emerald active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20"
                   >
                     <div className="flex items-center space-x-2">
                       <TrendingUp className="w-6 h-6" />
                       <span>OPEN LONG</span>
                     </div>
-                    <span className="text-sm font-mono bg-emerald-900/60 px-3 py-1 rounded-lg border border-emerald-400/40">
-                      {multiplierLong}
-                    </span>
+                    <div className="text-right">
+                      <span className="text-sm font-mono bg-emerald-900/60 px-3 py-1 rounded-lg border border-emerald-400/40 inline-block">
+                        {multiplierLong}
+                      </span>
+                      <span className="block text-[9px] text-emerald-200/80 font-normal mt-0.5">
+                        {leverage} LEVERAGE
+                      </span>
+                    </div>
                   </button>
 
                   <button
                     disabled={isSubmitting}
                     onClick={() => handleOpenPosition("SHORT")}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 via-pink-600 to-red-600 hover:from-rose-400 hover:to-pink-500 font-mono font-black text-lg flex items-center justify-between px-6 neon-glow-rose active:scale-95 transition-all disabled:opacity-50"
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 via-pink-600 to-red-600 hover:from-rose-400 hover:to-pink-500 font-mono font-black text-lg flex items-center justify-between px-6 neon-glow-rose active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-rose-500/20"
                   >
                     <div className="flex items-center space-x-2">
                       <TrendingDown className="w-6 h-6" />
                       <span>OPEN SHORT</span>
                     </div>
-                    <span className="text-sm font-mono bg-rose-900/60 px-3 py-1 rounded-lg border border-rose-400/40">
-                      {multiplierShort}
-                    </span>
+                    <div className="text-right">
+                      <span className="text-sm font-mono bg-rose-900/60 px-3 py-1 rounded-lg border border-rose-400/40 inline-block">
+                        {multiplierShort}
+                      </span>
+                      <span className="block text-[9px] text-rose-200/80 font-normal mt-0.5">
+                        {leverage} LEVERAGE
+                      </span>
+                    </div>
                   </button>
                 </div>
               </div>

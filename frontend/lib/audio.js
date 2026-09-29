@@ -50,6 +50,10 @@ class CyberAudioEngine {
   }
 
   // Subtle tactile UI click
+  playClick() {
+    return this.playTick();
+  }
+
   playTick() {
     if (this.muted) return;
     try {
