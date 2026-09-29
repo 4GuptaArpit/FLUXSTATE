@@ -21,6 +21,7 @@ import {
   PlayCircle,
   History,
   Award,
+  Trophy,
   Sparkles,
   RefreshCw,
   BarChart3,
@@ -38,6 +39,8 @@ import WhaleActivityFeed from "../components/WhaleActivityFeed";
 import MonadVsEthComparison from "../components/MonadVsEthComparison";
 import ClaimRewardModal from "../components/ClaimRewardModal";
 import LiveOrderTape from "../components/LiveOrderTape";
+import BlockFundingGauge from "../components/BlockFundingGauge";
+import LeaderboardTab from "../components/LeaderboardTab";
 import { cyberAudio } from "../lib/audio";
 
 const MARKETS = {
@@ -434,6 +437,18 @@ export default function FluxStateTerminal() {
               <span>Parallel Telemetry</span>
             </button>
             <button
+              onClick={() => {
+                setActiveTab("leaderboard");
+                if (cyberAudio && cyberAudio.playTick) cyberAudio.playTick();
+              }}
+              className={"px-3 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 " + (
+                activeTab === "leaderboard" ? "bg-purple-600 text-white font-bold shadow-md shadow-purple-600/40" : "text-slate-400 hover:text-white"
+              )}
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span>Leaderboard</span>
+            </button>
+            <button
               onClick={() => setActiveTab("comparison")}
               className={"px-3 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 " + (
                 activeTab === "comparison" ? "bg-purple-600 text-white font-bold shadow-md shadow-purple-600/40" : "text-slate-400 hover:text-white"
@@ -558,6 +573,16 @@ export default function FluxStateTerminal() {
       {activeTab === "telemetry" && (
         <div className="max-w-7xl mx-auto w-full p-6">
           <ParallelExecutionProof activeEpoch={epochId} />
+        </div>
+      )}
+
+      {activeTab === "leaderboard" && (
+        <div className="max-w-7xl mx-auto w-full p-6">
+          <LeaderboardTab 
+            walletAddress={walletAddress} 
+            isDemoMode={isDemoMode} 
+            userPositions={myPositions} 
+          />
         </div>
       )}
 
@@ -949,16 +974,13 @@ export default function FluxStateTerminal() {
                 </div>
               </div>
 
-              {/* Architecture Moat Explainer (Judges Callout) */}
-              <div className="mt-6 bg-[#060217]/80 border border-purple-500/20 rounded-2xl p-4 text-xs space-y-2">
-                <div className="flex items-center space-x-2 text-cyan-300 font-mono font-bold">
-                  <Cpu className="w-4 h-4 text-cyan-400" />
-                  <span>MONAD TRACK 01: BLOCK-BY-BLOCK FUNDING</span>
-                </div>
-                <p className="text-slate-400 font-mono text-[11px] leading-relaxed">
-                  Funding rate dynamically balances every 1-second block based on open interest skew: <code className="text-cyan-300">(Longs - Shorts) / Total</code>. 
-                  Non-colliding parallel EVM slots guarantee zero execution bottlenecks.
-                </p>
+              {/* Interactive Circular Block Funding Rate Gauge (Judges Moat) */}
+              <div className="mt-6">
+                <BlockFundingGauge 
+                  poolLong={poolLong} 
+                  poolShort={poolShort} 
+                  marketKey={activeMarketKey} 
+                />
               </div>
             </div>
           </section>
