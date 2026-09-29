@@ -615,6 +615,8 @@ export default function FluxStateTerminal() {
                   priceHistory={priceHistories[activeMarketKey]} 
                   currentPrice={prices[activeMarketKey]} 
                   lockPrice={prices[activeMarketKey] * 0.999}
+                  marketKey={activeMarketKey}
+                  activeEpoch={epochId}
                 />
               </div>
 
