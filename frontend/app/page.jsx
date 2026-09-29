@@ -24,6 +24,8 @@ import {
   Sparkles,
   RefreshCw,
   BarChart3,
+  Volume2,
+  VolumeX,
   ExternalLink
 } from "lucide-react";
 import { getWalletClient, monadTestnet, FLUX_MARKET_ABI, CONTRACT_ADDRESSES } from "../lib/web3";
@@ -35,6 +37,8 @@ import ParallelExecutionProof from "../components/ParallelExecutionProof";
 import WhaleActivityFeed from "../components/WhaleActivityFeed";
 import MonadVsEthComparison from "../components/MonadVsEthComparison";
 import ClaimRewardModal from "../components/ClaimRewardModal";
+import LiveOrderTape from "../components/LiveOrderTape";
+import { cyberAudio } from "../lib/audio";
 
 const MARKETS = {
   "MON/USD": {
@@ -133,6 +137,9 @@ export default function FluxStateTerminal() {
 
   const [claimModalOpen, setClaimModalOpen] = useState(false);
   const [claimRound, setClaimRound] = useState(null);
+  const [latestUserTrade, setLatestUserTrade] = useState(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [activeShockwave, setActiveShockwave] = useState(null);
 
   // Multipliers & Block Funding rate (P1)
   const multiplierLong = useMemo(() => {
@@ -259,6 +266,9 @@ export default function FluxStateTerminal() {
     }
 
     setIsSubmitting(true);
+    cyberAudio.playOrderPlaced(dir);
+    setActiveShockwave(dir);
+    setTimeout(() => setActiveShockwave(null), 600);
     const directionEnum = dir === "LONG" ? 0 : 1;
     const currentPriceStr = "$" + prices[activeMarketKey].toLocaleString();
 
@@ -322,6 +332,7 @@ export default function FluxStateTerminal() {
         };
 
         setMyPositions(prev => [newPos, ...prev]);
+        setLatestUserTrade({ dir, amount: betAmount, price: currentPriceStr, market: activeMarketKey });
 
         // Auto resolve after epoch completes to surprise judge
         setTimeout(() => {
@@ -449,6 +460,21 @@ export default function FluxStateTerminal() {
         {/* Wallet & Judge 1-Click Demo Actions (P2) */}
         <div className="flex items-center space-x-3">
           
+          
+          {/* Audio Haptics Toggle */}
+          <button
+            onClick={() => {
+              const next = cyberAudio.toggleMute();
+              setIsMuted(next);
+              if (!next) cyberAudio.playTick();
+            }}
+            title={isMuted ? "Unmute Audio" : "Mute Audio"}
+            className="px-2.5 py-2 rounded-xl font-mono text-xs text-slate-300 bg-[#090325] border border-purple-900/50 hover:border-purple-500/50 transition-all flex items-center gap-1.5"
+          >
+            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />}
+            <span className="hidden xl:inline">{isMuted ? "MUTED" : "HAPTIC AUDIO"}</span>
+          </button>
+  
           {/* Quick-Launch 500-Order Storm Engine for Judges */}
           <button
             onClick={() => setActiveTab("telemetry")}
@@ -683,6 +709,10 @@ export default function FluxStateTerminal() {
                   </tbody>
                 </table>
               </div>
+            </div>
+            {/* Live High-Frequency Trade Tape */}
+            <div className="mt-6">
+              <LiveOrderTape activeMarketKey={activeMarketKey} latestUserTrade={latestUserTrade} />
             </div>
           </section>
 

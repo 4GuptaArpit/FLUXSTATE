@@ -17,6 +17,7 @@ import {
   Info
 } from "lucide-react";
 import confetti from "canvas-confetti";
+import { cyberAudio } from "../lib/audio";
 
 export default function ParallelExecutionProof({ activeEpoch = 1042 }) {
   const [mounted, setMounted] = useState(false);
@@ -80,6 +81,7 @@ export default function ParallelExecutionProof({ activeEpoch = 1042 }) {
     if (isSimulating) return;
 
     setIsSimulating(true);
+    cyberAudio.playStormTrigger();
     setProgress(0);
     setSimResults(null);
     setSelectedCell(null);
@@ -136,6 +138,7 @@ export default function ParallelExecutionProof({ activeEpoch = 1042 }) {
           origin: { y: 0.6 },
           colors: ["#06B6D4", "#8B5CF6", "#10B981"]
         });
+        cyberAudio.playWinChime();
 
         // Set benchmark comparative metrics
         const monadTime = (0.74 + (totalOrders / 500) * 0.12).toFixed(2);
