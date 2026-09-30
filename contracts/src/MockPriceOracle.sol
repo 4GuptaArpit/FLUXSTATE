@@ -1,46 +1,29 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.24;
 
-/**
- * @title MockPriceOracle
- * @notice High-frequency push oracle compatible with Pyth price feed interface semantics.
- * @dev Optimized for sub-second / 1-second price updates on high-throughput chains like Monad.
- */
-contract MockPriceOracle {
-    struct PriceData {
-        int64 price;
-        uint64 conf;
-        int32 expo;
-        uint256 publishTime;
+import "./interfaces/IPyth.sol";
+
+contract MockPriceOracle is IPyth {
+    int64 private _price = 428500000; // .285 (8 decimals)
+    int32 private _expo = -8;
+
+    function setPrice(int64 newPrice, int32 newExpo) external {
+        _price = newPrice;
+        _expo = newExpo;
     }
 
-    address public owner;
-    mapping(bytes32 => PriceData) private _prices;
-
-    event PriceFeedUpdated(bytes32 indexed id, int64 price, uint256 publishTime);
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "MockPriceOracle: caller is not owner");
-        _;
-    }
-
-    constructor() {
-        owner = msg.sender;
-    }
-
-    function setPrice(bytes32 id, int64 price, int32 expo) external onlyOwner {
-        _prices[id] = PriceData({
-            price: price,
+    function getPriceNoOlderThan(bytes32, uint256) external view override returns (Price memory price) {
+        return Price({
+            price: _price,
             conf: 1000,
-            expo: expo,
+            expo: _expo,
             publishTime: block.timestamp
         });
-        emit PriceFeedUpdated(id, price, block.timestamp);
     }
 
-    function getPrice(bytes32 id) external view returns (int64 price, int32 expo, uint256 publishTime) {
-        PriceData memory data = _prices[id];
-        require(data.publishTime > 0, "MockPriceOracle: price not set");
-        return (data.price, data.expo, data.publishTime);
+    function getUpdateFee(bytes[] calldata) external pure override returns (uint256) {
+        return 0;
     }
+
+    function updatePriceFeeds(bytes[] calldata) external payable override {}
 }
