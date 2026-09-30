@@ -22,13 +22,14 @@ import {
   ArrowDownRight,
   History
 } from "lucide-react";
-import { getWalletClient, monadTestnet, FLUX_MARKET_ABI, CONTRACT_ADDRESSES } from "../lib/web3";
+import { getWalletClient, getPublicClient, monadTestnet, FLUX_MARKET_ABI, CONTRACT_ADDRESSES } from "../lib/web3";
+import { formatEther } from "viem";
 import { parseEther } from "viem";
 import { ShardMonitor } from "../components/ShardMonitor";
 
 export default function FluxGamingTerminal() {
   const [monPrice, setMonPrice] = useState(4.285);
-  const [priceHistory, setPriceHistory] = useState([4.275, 4.278, 4.281, 4.285, 4.282, 4.288, 4.285]);
+  const [priceHistory, setPriceHistory] = useState(() => Array.from({ length: 24 }, (_, i) => +(4.270 + Math.sin(i / 3) * 0.015 + (i * 0.0006)).toFixed(4)));
   const [secondsRemaining, setSecondsRemaining] = useState(6);
   const [epochId, setEpochId] = useState(882);
   const [margin, setMargin] = useState("10");
@@ -113,7 +114,7 @@ export default function FluxGamingTerminal() {
       const delta = (Math.random() - 0.49) * 0.006;
       setMonPrice((prev) => {
         const next = +(prev + delta).toFixed(4);
-        setPriceHistory((hist) => [...hist.slice(-24), next]);
+        setPriceHistory((hist) => [...hist.slice(-23), next]);
         return next;
       });
     }, 500);
@@ -136,13 +137,27 @@ export default function FluxGamingTerminal() {
     return () => clearInterval(timer);
   }, []);
 
+  // Fetch real onchain MON balance
+  const fetchRealBalance = async (address) => {
+    try {
+      const publicClient = getPublicClient();
+      const rawBalance = await publicClient.getBalance({ address });
+      const formatted = parseFloat(formatEther(rawBalance));
+      setUserBalance(formatted);
+    } catch (err) {
+      console.warn("Could not fetch onchain balance:", err);
+    }
+  };
+
   const handleConnectWallet = async () => {
     try {
-      const walletClient = getWalletClient();
-      if (!walletClient) {
-        setWalletAddress("0x7F2B...4a9B (Pilot Mode)");
+      if (typeof window === "undefined" || !window.ethereum) {
+        alert("Please install MetaMask or a Web3 wallet to connect your real Monad account!");
         return;
       }
+      const walletClient = getWalletClient();
+      if (!walletClient) return;
+
       const [address] = await walletClient.requestAddresses();
       try {
         await walletClient.switchChain({ id: monadTestnet.id });
@@ -152,15 +167,51 @@ export default function FluxGamingTerminal() {
         }
       }
       setWalletAddress(address);
+      await fetchRealBalance(address);
     } catch (err) {
       console.warn("Wallet connect error:", err);
-      setWalletAddress("0x7F2B...4a9B (Pilot Mode)");
     }
   };
 
-  const handleOpenPosition = (isLong) => {
+  // Auto-detect wallet if already authorized and listen to account/chain switches
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.ethereum) {
+      window.ethereum.request({ method: "eth_accounts" })
+        .then((accounts) => {
+          if (accounts && accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+            fetchRealBalance(accounts[0]);
+          }
+        })
+        .catch(console.warn);
+
+      const handleAccounts = (accounts) => {
+        if (accounts && accounts.length > 0) {
+          setWalletAddress(accounts[0]);
+          fetchRealBalance(accounts[0]);
+        } else {
+          setWalletAddress(null);
+          setUserBalance(0);
+        }
+      };
+
+      const handleChain = () => {
+        window.location.reload();
+      };
+
+      window.ethereum.on?.("accountsChanged", handleAccounts);
+      window.ethereum.on?.("chainChanged", handleChain);
+
+      return () => {
+        window.ethereum.removeListener?.("accountsChanged", handleAccounts);
+        window.ethereum.removeListener?.("chainChanged", handleChain);
+      };
+    }
+  }, []);
+
+  const handleOpenPosition = async (isLong) => {
     if (!walletAddress) {
-      handleConnectWallet();
+      await handleConnectWallet();
       return;
     }
     if (activePosition) {
@@ -239,7 +290,7 @@ export default function FluxGamingTerminal() {
 
   const displayWallet = walletAddress 
     ? (walletAddress.length > 18 ? walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4) : walletAddress)
-    : "ENTER ARENA";
+    : "CONNECT WALLET";
 
   return (
     <div className="min-h-screen bg-[#030014] text-slate-100 cyber-grid flex flex-col selection:bg-purple-600 relative overflow-hidden">
@@ -339,7 +390,7 @@ export default function FluxGamingTerminal() {
 
                 <div className="mt-3 flex items-baseline space-x-4">
                   <span className="text-5xl font-mono font-black tracking-tighter text-white drop-shadow-[0_0_20px_rgba(6,182,212,0.4)]">
-                    
+                    {"$" + monPrice.toFixed(4)}
                   </span>
                   <span className="text-emerald-400 text-sm font-mono font-bold flex items-center bg-emerald-950/50 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                     <TrendingUp className="w-3.5 h-3.5 mr-1" /> +4.12%
@@ -369,7 +420,7 @@ export default function FluxGamingTerminal() {
               <div className="absolute top-1/2 left-0 w-full h-[1px] bg-purple-500/10 dashed" />
 
               {priceHistory.map((val, idx) => {
-                const heightPercent = Math.min(100, Math.max(18, ((val - 4.27) / 0.03) * 100));
+                const minP = Math.min(...priceHistory); const maxP = Math.max(...priceHistory); const spread = Math.max(0.005, maxP - minP); const heightPercent = Math.min(95, Math.max(20, Math.round(((val - minP) / spread) * 75 + 15)));
                 const isLatest = idx === priceHistory.length - 1;
                 return (
                   <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group">
@@ -416,12 +467,12 @@ export default function FluxGamingTerminal() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 text-xs font-mono">
                 <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
                   <div className="text-slate-400 mb-1">Entry Price:</div>
-                  <div className="text-base font-bold text-white"></div>
+                  <div className="text-base font-bold text-white">{"$" + activePosition.entryPrice.toFixed(4)}</div>
                 </div>
 
                 <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
                   <div className="text-slate-400 mb-1">Mark Price:</div>
-                  <div className="text-base font-bold text-cyan-300"></div>
+                  <div className="text-base font-bold text-cyan-300">{"$" + monPrice.toFixed(4)}</div>
                 </div>
 
                 <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
@@ -600,15 +651,15 @@ export default function FluxGamingTerminal() {
               <div className="mt-5 bg-[#08021C] rounded-2xl p-4 space-y-2.5 text-xs font-mono border border-purple-900/40">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Position Notional:</span>
-                  <span className="font-bold text-white"> USD</span>
+                  <span className="font-bold text-white">{"$" + (notionalSize * monPrice).toFixed(2) + " USD"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Est. Liq Price (Long):</span>
-                  <span className="font-bold text-emerald-400"></span>
+                  <span className="font-bold text-emerald-400">{"$" + liqPriceLong.toFixed(4)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Est. Liq Price (Short):</span>
-                  <span className="font-bold text-rose-400"></span>
+                  <span className="font-bold text-rose-400">{"$" + liqPriceShort.toFixed(4)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Protocol Fee (0.08%):</span>
