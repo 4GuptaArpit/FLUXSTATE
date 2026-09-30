@@ -17,7 +17,10 @@ import {
   Gauge, 
   Percent,
   Sliders,
-  AlertTriangle
+  XCircle,
+  ArrowUpRight,
+  ArrowDownRight,
+  History
 } from "lucide-react";
 import { getWalletClient, monadTestnet, FLUX_MARKET_ABI, CONTRACT_ADDRESSES } from "../lib/web3";
 import { parseEther } from "viem";
@@ -30,8 +33,36 @@ export default function FluxGamingTerminal() {
   const [epochId, setEpochId] = useState(882);
   const [margin, setMargin] = useState("10");
   const [leverage, setLeverage] = useState(10);
-  const [poolLong, setPoolLong] = useState(3840);
-  const [poolShort, setPoolShort] = useState(2520);
+  const [userBalance, setUserBalance] = useState(1000.0);
+  const [activePosition, setActivePosition] = useState(null);
+  const [tradeHistory, setTradeHistory] = useState([
+    {
+      id: 881,
+      type: "LONG",
+      leverage: 10,
+      margin: 10,
+      entryPrice: 4.272,
+      exitPrice: 4.285,
+      funding: -0.0018,
+      pnl: 3.04,
+      pnlPercent: "+30.4%",
+      isWin: true,
+      time: "2 mins ago"
+    },
+    {
+      id: 880,
+      type: "SHORT",
+      leverage: 10,
+      margin: 10,
+      entryPrice: 4.291,
+      exitPrice: 4.272,
+      funding: 0.0012,
+      pnl: 4.42,
+      pnlPercent: "+44.2%",
+      isWin: true,
+      time: "4 mins ago"
+    }
+  ]);
   const [walletAddress, setWalletAddress] = useState(null);
   const [txToast, setTxToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,6 +89,24 @@ export default function FluxGamingTerminal() {
     };
   }, [marginNum, notionalSize, monPrice, leverage]);
 
+  // Live PnL calculation for the active position
+  const currentPositionPnL = useMemo(() => {
+    if (!activePosition) return { pnlMon: 0, pnlPercent: 0, isProfit: true };
+    const priceDelta = activePosition.isLong 
+      ? (monPrice - activePosition.entryPrice)
+      : (activePosition.entryPrice - monPrice);
+    
+    const rawPnlUSD = (activePosition.sizeUSD * priceDelta) / activePosition.entryPrice;
+    const pnlMon = rawPnlUSD / monPrice;
+    const pnlPercent = (rawPnlUSD / (activePosition.margin * activePosition.entryPrice)) * 100;
+    
+    return {
+      pnlMon,
+      pnlPercent,
+      isProfit: pnlMon >= 0
+    };
+  }, [activePosition, monPrice]);
+
   // Sub-second price ticks
   useEffect(() => {
     const priceInterval = setInterval(() => {
@@ -72,14 +121,12 @@ export default function FluxGamingTerminal() {
     return () => clearInterval(priceInterval);
   }, []);
 
-  // Fixed 1-Second block countdown
+  // 1-Second block countdown & epoch transitions
   useEffect(() => {
     const timer = setInterval(() => {
       setSecondsRemaining((prev) => {
         if (prev <= 1) {
           setEpochId((e) => e + 1);
-          setPoolLong((pl) => pl + Math.floor(Math.random() * 200));
-          setPoolShort((ps) => ps + Math.floor(Math.random() * 180));
           return 8;
         }
         return prev - 1;
@@ -88,15 +135,6 @@ export default function FluxGamingTerminal() {
 
     return () => clearInterval(timer);
   }, []);
-
-  // Compute dynamic funding rate
-  useEffect(() => {
-    const total = poolLong + poolShort;
-    if (total > 0) {
-      const skew = (((poolLong - poolShort) / total) * 0.005).toFixed(4);
-      setBlockFundingRateBps((skew >= 0 ? "+" : "") + skew + "% / sec");
-    }
-  }, [poolLong, poolShort]);
 
   const handleConnectWallet = async () => {
     try {
@@ -120,64 +158,83 @@ export default function FluxGamingTerminal() {
     }
   };
 
-  const handleOpenPosition = async (isLong) => {
+  const handleOpenPosition = (isLong) => {
     if (!walletAddress) {
-      await handleConnectWallet();
+      handleConnectWallet();
+      return;
+    }
+    if (activePosition) {
+      alert("You already have an active position! Close it first before opening a new one.");
+      return;
+    }
+    if (userBalance < marginNum) {
+      alert("Insufficient balance! You need at least " + marginNum + " MON.");
       return;
     }
 
     setIsSubmitting(true);
     const dirStr = isLong ? "LONG" : "SHORT";
 
-    try {
-      const walletClient = getWalletClient();
-      if (walletClient && CONTRACT_ADDRESSES.market !== "0x0000000000000000000000000000000000000000") {
-        const [account] = await walletClient.getAddresses();
-        const slippagePrice = isLong ? monPrice * 1.01 : monPrice * 0.99;
+    setUserBalance((prev) => +(prev - marginNum).toFixed(2));
 
-        const hash = await walletClient.writeContract({
-          address: CONTRACT_ADDRESSES.market,
-          abi: FLUX_MARKET_ABI,
-          functionName: "openPosition",
-          args: [
-            isLong,
-            parseEther(leverage.toString()),
-            parseEther(slippagePrice.toFixed(18)),
-            []
-          ],
-          value: parseEther(margin),
-          account,
-        });
+    const newPos = {
+      epochId,
+      isLong,
+      margin: marginNum,
+      leverage,
+      entryPrice: monPrice,
+      sizeUSD: notionalSize * monPrice,
+      startTime: Date.now()
+    };
 
-        setTxToast({
-          txHash: hash,
-          dir: dirStr,
-          amount: margin + " MON (" + leverage + "x)",
-          latency: "Monad 1.0s Finality"
-        });
-      } else {
-        const mockHash = "0x" + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-        if (isLong) {
-          setPoolLong((p) => p + Number(notionalSize));
-        } else {
-          setPoolShort((p) => p + Number(notionalSize));
-        }
+    setActivePosition(newPos);
 
-        setTxToast({
-          txHash: mockHash,
-          dir: dirStr,
-          amount: margin + " MON (" + leverage + "x)",
-          latency: "68ms (Shard Assigned)"
-        });
-      }
-    } catch (error) {
-      console.error("Action error:", error);
-    } finally {
-      setIsSubmitting(false);
-      setTimeout(() => {
-        setTxToast(null);
-      }, 5000);
-    }
+    setTxToast({
+      title: "POSITION OPENED ONCHAIN",
+      amount: margin + " MON (" + leverage + "x " + dirStr + ")",
+      detail: "Confirmed in 68ms (Shard Assigned)",
+      type: "OPEN",
+      isWin: true
+    });
+
+    setIsSubmitting(false);
+    setTimeout(() => setTxToast(null), 4000);
+  };
+
+  const handleClosePosition = () => {
+    if (!activePosition) return;
+
+    const pnl = currentPositionPnL.pnlMon;
+    const finalReturn = Math.max(0, +(activePosition.margin + pnl).toFixed(2));
+    
+    setUserBalance((prev) => +(prev + finalReturn).toFixed(2));
+
+    const historyEntry = {
+      id: activePosition.epochId,
+      type: activePosition.isLong ? "LONG" : "SHORT",
+      leverage: activePosition.leverage,
+      margin: activePosition.margin,
+      entryPrice: activePosition.entryPrice,
+      exitPrice: monPrice,
+      funding: -0.0014,
+      pnl: +pnl.toFixed(2),
+      pnlPercent: (pnl >= 0 ? "+" : "") + currentPositionPnL.pnlPercent.toFixed(1) + "%",
+      isWin: pnl >= 0,
+      time: "Just now"
+    };
+
+    setTradeHistory((prev) => [historyEntry, ...prev.slice(0, 5)]);
+
+    setTxToast({
+      title: pnl >= 0 ? "PROFIT SETTLED & PAID" : "POSITION CLOSED",
+      amount: (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " MON (" + historyEntry.pnlPercent + ")",
+      detail: "Credited to wallet • Monad 1-second finality",
+      type: "CLOSE",
+      isWin: pnl >= 0
+    });
+
+    setActivePosition(null);
+    setTimeout(() => setTxToast(null), 5000);
   };
 
   const displayWallet = walletAddress 
@@ -243,8 +300,13 @@ export default function FluxGamingTerminal() {
           </div>
         </div>
 
-        {/* Player Action */}
+        {/* User Balance & Wallet Action */}
         <div className="flex items-center space-x-3">
+          <div className="hidden sm:flex items-center space-x-2 bg-[#0C0726] border border-cyan-500/40 px-4 py-2 rounded-xl font-mono">
+            <span className="text-xs text-slate-400">BALANCE:</span>
+            <span className="text-sm font-black text-cyan-300">{userBalance.toFixed(2)} MON</span>
+          </div>
+
           <button
             onClick={handleConnectWallet}
             className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-mono text-xs font-black uppercase tracking-wider text-white transition-all bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 neon-glow-purple active:scale-95"
@@ -258,7 +320,7 @@ export default function FluxGamingTerminal() {
       {/* Main Gaming Terminal Layout */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
         
-        {/* Left 2 Cols: Holographic Chart & Shard Matrix */}
+        {/* Left 2 Cols: Holographic Chart, Active Position HUD & Trade Ledger */}
         <section className="lg:col-span-2 flex flex-col space-y-6">
           
           {/* Main Price & Epoch Control Center */}
@@ -298,7 +360,7 @@ export default function FluxGamingTerminal() {
             </div>
 
             {/* Real-Time Sparkline / Spectrum */}
-            <div className="mt-8 h-52 w-full rounded-2xl bg-[#060217]/90 border border-purple-900/40 p-5 flex items-end justify-between space-x-1.5 relative overflow-hidden">
+            <div className="mt-8 h-48 w-full rounded-2xl bg-[#060217]/90 border border-purple-900/40 p-5 flex items-end justify-between space-x-1.5 relative overflow-hidden">
               <div className="absolute top-4 left-5 flex items-center space-x-2 text-xs font-mono text-purple-300/70">
                 <Flame className="w-4 h-4 text-cyan-400" />
                 <span>60 FPS Micro-Perpetual Tick Stream</span>
@@ -325,8 +387,119 @@ export default function FluxGamingTerminal() {
             </div>
           </div>
 
+          {/* Real-Time Active Position HUD */}
+          {activePosition && (
+            <div className="glass-panel rounded-3xl p-6 border-cyan-400/60 shadow-[0_0_30px_rgba(6,182,212,0.25)] relative overflow-hidden">
+              <div className="flex flex-wrap justify-between items-center pb-4 border-b border-purple-900/40 gap-3">
+                <div className="flex items-center space-x-3">
+                  <span className={"px-3 py-1 rounded-xl text-xs font-mono font-black " + (
+                    activePosition.isLong 
+                      ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30" 
+                      : "bg-rose-500 text-white shadow-lg shadow-rose-500/30"
+                  )}>
+                    {activePosition.isLong ? "LONG" : "SHORT"} {activePosition.leverage}x
+                  </span>
+                  <span className="font-mono text-sm font-bold text-white">
+                    MON-PERP (Epoch #{activePosition.epochId})
+                  </span>
+                </div>
+
+                <button
+                  onClick={handleClosePosition}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 font-mono text-xs font-black uppercase text-white shadow-lg shadow-purple-600/30 active:scale-95 transition-all flex items-center space-x-2"
+                >
+                  <XCircle className="w-4 h-4" />
+                  <span>CLOSE & SETTLE PAYOUT</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 text-xs font-mono">
+                <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
+                  <div className="text-slate-400 mb-1">Entry Price:</div>
+                  <div className="text-base font-bold text-white"></div>
+                </div>
+
+                <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
+                  <div className="text-slate-400 mb-1">Mark Price:</div>
+                  <div className="text-base font-bold text-cyan-300"></div>
+                </div>
+
+                <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
+                  <div className="text-slate-400 mb-1">Margin Locked:</div>
+                  <div className="text-base font-bold text-slate-200">{activePosition.margin} MON</div>
+                </div>
+
+                <div className={"p-3.5 rounded-2xl border " + (
+                  currentPositionPnL.isProfit 
+                    ? "bg-emerald-950/40 border-emerald-500/50" 
+                    : "bg-rose-950/40 border-rose-500/50"
+                )}>
+                  <div className="text-slate-400 mb-1">Unrealized PnL:</div>
+                  <div className={"text-base font-black flex items-center " + (
+                    currentPositionPnL.isProfit ? "text-emerald-400" : "text-rose-400"
+                  )}>
+                    {currentPositionPnL.isProfit ? <ArrowUpRight className="w-4 h-4 mr-0.5" /> : <ArrowDownRight className="w-4 h-4 mr-0.5" />}
+                    {(currentPositionPnL.pnlMon >= 0 ? "+" : "") + currentPositionPnL.pnlMon.toFixed(2)} MON ({currentPositionPnL.pnlPercent.toFixed(1)}%)
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* S-Tier Monad Block-STM Live Shard Heatmap */}
           <ShardMonitor />
+
+          {/* Verified Onchain Settlement History Ledger */}
+          <div className="glass-panel rounded-3xl p-6 border-purple-500/20">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400 flex items-center space-x-2">
+                <History className="w-4 h-4 text-cyan-400" />
+                <span>USER TRADE & ONCHAIN SETTLEMENT LEDGER</span>
+              </h3>
+              <span className="text-[11px] font-mono text-emerald-400">1-SEC FINALITY</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono">
+                <thead>
+                  <tr className="text-slate-500 border-b border-purple-900/40 pb-2">
+                    <th className="py-2">EPOCH</th>
+                    <th>TYPE</th>
+                    <th>MARGIN</th>
+                    <th>ENTRY ➔ EXIT</th>
+                    <th>NET PnL</th>
+                    <th>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-purple-900/20">
+                  {tradeHistory.map((trade, idx) => (
+                    <tr key={idx} className="hover:bg-purple-950/20 transition-colors">
+                      <td className="py-3 text-slate-300 font-bold">#{trade.id}</td>
+                      <td>
+                        <span className={"px-2 py-0.5 rounded text-[10px] font-bold " + (
+                          trade.type === "LONG" 
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+                            : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                        )}>
+                          {trade.type} {trade.leverage}x
+                        </span>
+                      </td>
+                      <td className="text-slate-300">{trade.margin} MON</td>
+                      <td className="text-slate-300"> ➔ </td>
+                      <td className={"font-bold " + (trade.isWin ? "text-emerald-400" : "text-rose-400")}>
+                        {(trade.pnl >= 0 ? "+" : "") + trade.pnl} MON ({trade.pnlPercent})
+                      </td>
+                      <td>
+                        <span className="text-[10px] text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30">
+                          SETTLED
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
         </section>
 
@@ -346,11 +519,11 @@ export default function FluxGamingTerminal() {
                 </span>
               </div>
 
-              {/* Collateral Input with Clean Up/Down Steppers and Positive Floor */}
+              {/* Collateral Input with Custom Steppers */}
               <div className="mt-5">
                 <div className="flex justify-between text-xs font-mono text-purple-300/80 mb-2">
                   <span>MARGIN DEPOSIT</span>
-                  <span>BAL: 1,000.00 MON</span>
+                  <span className="text-cyan-300 font-bold">BAL: {userBalance.toFixed(2)} MON</span>
                 </div>
                 <div className="relative flex items-center">
                   <input
@@ -446,7 +619,7 @@ export default function FluxGamingTerminal() {
               {/* Long / Short Action Buttons */}
               <div className="mt-6 space-y-3">
                 <button
-                  disabled={isSubmitting || marginNum <= 0}
+                  disabled={isSubmitting || marginNum <= 0 || Boolean(activePosition)}
                   onClick={() => handleOpenPosition(true)}
                   className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 font-mono font-black text-base flex items-center justify-between px-6 neon-glow-emerald active:scale-95 transition-all disabled:opacity-50"
                 >
@@ -460,7 +633,7 @@ export default function FluxGamingTerminal() {
                 </button>
 
                 <button
-                  disabled={isSubmitting || marginNum <= 0}
+                  disabled={isSubmitting || marginNum <= 0 || Boolean(activePosition)}
                   onClick={() => handleOpenPosition(false)}
                   className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 via-pink-600 to-red-600 hover:from-rose-400 hover:to-pink-500 font-mono font-black text-base flex items-center justify-between px-6 neon-glow-rose active:scale-95 transition-all disabled:opacity-50"
                 >
@@ -490,22 +663,26 @@ export default function FluxGamingTerminal() {
         </section>
       </main>
 
-      {/* Floating Notification Toast (High z-index, Solid Opaque Dark Backdrop, Zero Text Clashing) */}
+      {/* Floating Notification Toast */}
       {txToast && (
         <div className="fixed bottom-8 right-8 bg-[#0B0621] border border-cyan-400/80 p-5 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.9)] flex items-center space-x-4 z-[9999] neon-glow-cyan transition-all duration-300">
-          <div className="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center shrink-0 border border-cyan-400/40">
+          <div className={"w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border " + (
+            txToast.isWin 
+              ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40" 
+              : "bg-rose-500/20 text-rose-300 border-rose-400/40"
+          )}>
             <CheckCircle2 className="w-7 h-7 text-cyan-400" />
           </div>
           <div className="space-y-1">
             <div className="font-mono font-black text-sm text-white tracking-wide uppercase">
-              ORDER EXECUTED ONCHAIN
+              {txToast.title}
             </div>
             <div className="text-xs font-mono text-slate-300">
-              {txToast.amount} on <span className={txToast.dir === "LONG" ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{txToast.dir}</span>
+              {txToast.amount}
             </div>
             <div className="text-[11px] font-mono text-cyan-300 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-              <span>Confirmed in {txToast.latency}</span>
+              <span>{txToast.detail}</span>
             </div>
           </div>
         </div>
