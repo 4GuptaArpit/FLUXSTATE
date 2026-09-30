@@ -35,8 +35,9 @@ export default function FluxGamingTerminal() {
   const [margin, setMargin] = useState("10");
   const [leverage, setLeverage] = useState(10);
   const [userBalance, setUserBalance] = useState(1000.0);
+  const [isPilotMode, setIsPilotMode] = useState(true);
   const [activePosition, setActivePosition] = useState(null);
-  const [tradeHistory, setTradeHistory] = useState([
+  const defaultHistory = [
     {
       id: 881,
       type: "LONG",
@@ -63,7 +64,17 @@ export default function FluxGamingTerminal() {
       isWin: true,
       time: "4 mins ago"
     }
-  ]);
+  ];
+
+  const [tradeHistory, setTradeHistory] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("flux_trade_history");
+      if (saved) {
+        try { return JSON.parse(saved); } catch (e) {}
+      }
+    }
+    return defaultHistory;
+  });
   const [walletAddress, setWalletAddress] = useState(null);
   const [txToast, setTxToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -144,6 +155,7 @@ export default function FluxGamingTerminal() {
       const rawBalance = await publicClient.getBalance({ address });
       const formatted = parseFloat(formatEther(rawBalance));
       setUserBalance(formatted);
+      setIsPilotMode(false);
     } catch (err) {
       console.warn("Could not fetch onchain balance:", err);
     }
@@ -152,11 +164,17 @@ export default function FluxGamingTerminal() {
   const handleConnectWallet = async () => {
     try {
       if (typeof window === "undefined" || !window.ethereum) {
-        alert("Please install MetaMask or a Web3 wallet to connect your real Monad account!");
+        alert("MetaMask / Web3 wallet not detected. Switched to Pilot Sandbox Mode (1,000 MON).");
+        setIsPilotMode(true);
+        setUserBalance(1000.0);
         return;
       }
       const walletClient = getWalletClient();
-      if (!walletClient) return;
+      if (!walletClient) {
+        setIsPilotMode(true);
+        setUserBalance(1000.0);
+        return;
+      }
 
       const [address] = await walletClient.requestAddresses();
       try {
@@ -167,6 +185,7 @@ export default function FluxGamingTerminal() {
         }
       }
       setWalletAddress(address);
+      setIsPilotMode(false);
       await fetchRealBalance(address);
     } catch (err) {
       console.warn("Wallet connect error:", err);
@@ -180,18 +199,27 @@ export default function FluxGamingTerminal() {
         .then((accounts) => {
           if (accounts && accounts.length > 0) {
             setWalletAddress(accounts[0]);
+            setIsPilotMode(false);
             fetchRealBalance(accounts[0]);
+          } else {
+            setIsPilotMode(true);
+            setUserBalance(1000.0);
           }
         })
-        .catch(console.warn);
+        .catch(() => {
+          setIsPilotMode(true);
+          setUserBalance(1000.0);
+        });
 
       const handleAccounts = (accounts) => {
         if (accounts && accounts.length > 0) {
           setWalletAddress(accounts[0]);
+          setIsPilotMode(false);
           fetchRealBalance(accounts[0]);
         } else {
           setWalletAddress(null);
-          setUserBalance(0);
+          setIsPilotMode(true);
+          setUserBalance(1000.0);
         }
       };
 
@@ -206,14 +234,13 @@ export default function FluxGamingTerminal() {
         window.ethereum.removeListener?.("accountsChanged", handleAccounts);
         window.ethereum.removeListener?.("chainChanged", handleChain);
       };
+    } else {
+      setIsPilotMode(true);
+      setUserBalance(1000.0);
     }
   }, []);
 
   const handleOpenPosition = async (isLong) => {
-    if (!walletAddress) {
-      await handleConnectWallet();
-      return;
-    }
     if (activePosition) {
       alert("You already have an active position! Close it first before opening a new one.");
       return;
@@ -226,7 +253,8 @@ export default function FluxGamingTerminal() {
     setIsSubmitting(true);
     const dirStr = isLong ? "LONG" : "SHORT";
 
-    setUserBalance((prev) => +(prev - marginNum).toFixed(2));
+    // Deduct margin immediately
+    setUserBalance((prev) => Math.max(0, +(prev - marginNum).toFixed(4)));
 
     const newPos = {
       epochId,
@@ -241,9 +269,9 @@ export default function FluxGamingTerminal() {
     setActivePosition(newPos);
 
     setTxToast({
-      title: "POSITION OPENED ONCHAIN",
+      title: isPilotMode ? "DEMO POSITION OPENED" : "ONCHAIN POSITION OPENED",
       amount: margin + " MON (" + leverage + "x " + dirStr + ")",
-      detail: "Confirmed in 68ms (Shard Assigned)",
+      detail: isPilotMode ? "Simulated in Sandbox (0 Gas)" : "Confirmed in 68ms (Shard Assigned)",
       type: "OPEN",
       isWin: true
     });
@@ -274,7 +302,13 @@ export default function FluxGamingTerminal() {
       time: "Just now"
     };
 
-    setTradeHistory((prev) => [historyEntry, ...prev.slice(0, 5)]);
+    setTradeHistory((prev) => {
+      const updated = [historyEntry, ...prev.slice(0, 9)];
+      if (typeof window !== "undefined") {
+        localStorage.setItem("flux_trade_history", JSON.stringify(updated));
+      }
+      return updated;
+    });
 
     setTxToast({
       title: pnl >= 0 ? "PROFIT SETTLED & PAID" : "POSITION CLOSED",
@@ -353,17 +387,40 @@ export default function FluxGamingTerminal() {
 
         {/* User Balance & Wallet Action */}
         <div className="flex items-center space-x-3">
+          {/* Mode Pill Indicator */}
+          <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-xl border font-mono text-xs cursor-pointer select-none transition-all duration-300"
+            onClick={() => {
+              if (isPilotMode && !walletAddress) {
+                handleConnectWallet();
+              } else {
+                setIsPilotMode(!isPilotMode);
+                if (!isPilotMode) setUserBalance(1000.0);
+                else if (walletAddress) fetchRealBalance(walletAddress);
+              }
+            }}
+            title="Click to toggle between Live Testnet and Pilot Sandbox Mode"
+          >
+            <span className={"w-2 h-2 rounded-full " + (isPilotMode ? "bg-amber-400 animate-pulse" : "bg-emerald-400 animate-ping")} />
+            <span className={isPilotMode ? "text-amber-300 font-bold" : "text-emerald-300 font-bold"}>
+              {isPilotMode ? "PILOT SANDBOX" : "LIVE TESTNET"}
+            </span>
+          </div>
+
           <div className="hidden sm:flex items-center space-x-2 bg-[#0C0726] border border-cyan-500/40 px-4 py-2 rounded-xl font-mono">
             <span className="text-xs text-slate-400">BALANCE:</span>
-            <span className="text-sm font-black text-cyan-300">{userBalance.toFixed(2)} MON</span>
+            <span className="text-sm font-black text-cyan-300">{userBalance.toFixed(typeof userBalance === 'number' && userBalance < 10 ? 4 : 2)} MON</span>
           </div>
 
           <button
             onClick={handleConnectWallet}
-            className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-mono text-xs font-black uppercase tracking-wider text-white transition-all bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 neon-glow-purple active:scale-95"
+            className={"group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-mono text-xs font-black uppercase tracking-wider text-white transition-all " + (
+              walletAddress 
+                ? "bg-gradient-to-r from-purple-800 to-indigo-900 border border-purple-500/50 hover:border-cyan-400"
+                : "bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 neon-glow-purple active:scale-95"
+            )}
           >
             <Wallet className="w-4 h-4 text-cyan-200" />
-            <span>{displayWallet}</span>
+            <span>{walletAddress ? (walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4)) : "CONNECT WALLET"}</span>
           </button>
         </div>
       </header>
@@ -536,7 +593,7 @@ export default function FluxGamingTerminal() {
                         </span>
                       </td>
                       <td className="text-slate-300">{trade.margin} MON</td>
-                      <td className="text-slate-300"> ➔ </td>
+                      <td className="text-slate-300">{"$" + trade.entryPrice.toFixed(4) + " ➔ $" + trade.exitPrice.toFixed(4)}</td>
                       <td className={"font-bold " + (trade.isWin ? "text-emerald-400" : "text-rose-400")}>
                         {(trade.pnl >= 0 ? "+" : "") + trade.pnl} MON ({trade.pnlPercent})
                       </td>
@@ -574,7 +631,7 @@ export default function FluxGamingTerminal() {
               <div className="mt-5">
                 <div className="flex justify-between text-xs font-mono text-purple-300/80 mb-2">
                   <span>MARGIN DEPOSIT</span>
-                  <span className="text-cyan-300 font-bold">BAL: {userBalance.toFixed(2)} MON</span>
+                  <span className="text-cyan-300 font-bold">BAL: {userBalance.toFixed(typeof userBalance === 'number' && userBalance < 10 ? 4 : 2)} MON</span>
                 </div>
                 <div className="relative flex items-center">
                   <input
