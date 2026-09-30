@@ -37,7 +37,7 @@ export default function FluxGamingTerminal() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [blockFundingRateBps, setBlockFundingRateBps] = useState("+0.0024%");
 
-  const marginNum = parseFloat(margin) || 0;
+  const marginNum = Math.max(0, parseFloat(margin) || 0);
   const notionalSize = marginNum * leverage;
 
   // Real-time pre-flight calculation
@@ -72,7 +72,7 @@ export default function FluxGamingTerminal() {
     return () => clearInterval(priceInterval);
   }, []);
 
-  // Fixed 1-Second block countdown (Clean & Professional, Zero Confetti Distraction)
+  // Fixed 1-Second block countdown
   useEffect(() => {
     const timer = setInterval(() => {
       setSecondsRemaining((prev) => {
@@ -212,7 +212,7 @@ export default function FluxGamingTerminal() {
                 FLUXSTATE
               </span>
               <span className="text-[10px] uppercase font-mono tracking-widest px-2.5 py-0.5 rounded-md bg-purple-950/80 text-purple-300 border border-purple-500/40 shadow-sm">
-                S-TIER • TRACK 01 PERPETUALS
+                MONAD TESTNET • v2.0-BETA
               </span>
             </div>
             <div className="flex items-center space-x-2 text-xs text-purple-300/60 font-mono">
@@ -346,21 +346,50 @@ export default function FluxGamingTerminal() {
                 </span>
               </div>
 
-              {/* Collateral Input */}
+              {/* Collateral Input with Clean Up/Down Steppers and Positive Floor */}
               <div className="mt-5">
                 <div className="flex justify-between text-xs font-mono text-purple-300/80 mb-2">
                   <span>MARGIN DEPOSIT</span>
                   <span>BAL: 1,000.00 MON</span>
                 </div>
-                <div className="relative">
+                <div className="relative flex items-center">
                   <input
                     type="number"
+                    min="1"
+                    step="1"
                     value={margin}
-                    onChange={(e) => setMargin(e.target.value)}
-                    className="w-full bg-[#08021C] border border-purple-900/50 focus:border-cyan-400 rounded-xl px-4 py-3 text-lg font-mono text-white focus:outline-none transition-colors"
-                    placeholder="0.0"
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      if (isNaN(val) || val < 0) {
+                        setMargin("1");
+                      } else {
+                        setMargin(e.target.value);
+                      }
+                    }}
+                    className="w-full bg-[#08021C] border border-purple-900/50 focus:border-cyan-400 rounded-xl px-4 py-3 text-lg font-mono text-white focus:outline-none transition-colors pr-24"
+                    placeholder="10"
                   />
-                  <span className="absolute right-4 top-3.5 text-xs text-cyan-300 font-mono font-black">MON</span>
+                  <div className="absolute right-3 flex items-center space-x-2">
+                    <span className="text-xs text-cyan-300 font-mono font-black pointer-events-none">MON</span>
+                    <div className="flex flex-col border border-purple-900/50 rounded-md overflow-hidden bg-[#0C0726]">
+                      <button
+                        type="button"
+                        onClick={() => setMargin((prev) => (Math.max(1, (parseFloat(prev) || 0) + 1)).toString())}
+                        className="px-1.5 py-0.5 text-[9px] hover:bg-cyan-500/30 text-cyan-300 transition-colors font-bold cursor-pointer"
+                        title="Increase Margin"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMargin((prev) => (Math.max(1, (parseFloat(prev) || 0) - 1)).toString())}
+                        className="px-1.5 py-0.5 text-[9px] hover:bg-cyan-500/30 text-cyan-300 transition-colors font-bold border-t border-purple-900/40 cursor-pointer"
+                        title="Decrease Margin"
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -461,16 +490,22 @@ export default function FluxGamingTerminal() {
         </section>
       </main>
 
-      {/* Confirmation Toast */}
+      {/* Floating Notification Toast (High z-index, Solid Opaque Dark Backdrop, Zero Text Clashing) */}
       {txToast && (
-        <div className="fixed bottom-6 right-6 glass-panel border-cyan-500/50 p-4 rounded-2xl shadow-2xl flex items-center space-x-4 z-50 neon-glow-cyan animate-pulse">
-          <div className="w-11 h-11 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center">
-            <CheckCircle2 className="w-6 h-6" />
+        <div className="fixed bottom-8 right-8 bg-[#0B0621] border border-cyan-400/80 p-5 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.9)] flex items-center space-x-4 z-[9999] neon-glow-cyan transition-all duration-300">
+          <div className="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center shrink-0 border border-cyan-400/40">
+            <CheckCircle2 className="w-7 h-7 text-cyan-400" />
           </div>
-          <div>
-            <div className="font-mono font-bold text-sm text-white">ORDER EXECUTED ONCHAIN</div>
+          <div className="space-y-1">
+            <div className="font-mono font-black text-sm text-white tracking-wide uppercase">
+              ORDER EXECUTED ONCHAIN
+            </div>
             <div className="text-xs font-mono text-slate-300">
-              {txToast.amount} on {txToast.dir} • Confirmed in <span className="text-cyan-300 font-bold">{txToast.latency}</span>
+              {txToast.amount} on <span className={txToast.dir === "LONG" ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{txToast.dir}</span>
+            </div>
+            <div className="text-[11px] font-mono text-cyan-300 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span>Confirmed in {txToast.latency}</span>
             </div>
           </div>
         </div>
