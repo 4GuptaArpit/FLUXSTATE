@@ -26,10 +26,10 @@ export const monadTestnet = {
 };
 
 export const CONTRACT_ADDRESSES = {
-  market: process.env.NEXT_PUBLIC_MARKET_ADDRESS || "0xca45eee4bEc9B4dE2fFCD82C6d36eFB524A02176",
-  oracle: process.env.NEXT_PUBLIC_ORACLE_ADDRESS || "0x9438B88C0BcF1dD58AA0F86D5C1a7761b5D39AAC",
+  market: process.env.NEXT_PUBLIC_MARKET_ADDRESS || "0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5",
+  oracle: process.env.NEXT_PUBLIC_ORACLE_ADDRESS || "0xc547C6f06495690cEd525EDd8Eaf4C17484b0C39",
   markets: {
-    "MON/USD": process.env.NEXT_PUBLIC_MARKET_MON || "0xca45eee4bEc9B4dE2fFCD82C6d36eFB524A02176",
+    "MON/USD": process.env.NEXT_PUBLIC_MARKET_MON || "0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5",
     "ETH/USD": process.env.NEXT_PUBLIC_MARKET_ETH || "0x786e11A957677c8A17F08Db2cA75C7ABDA127E6C",
     "BTC/USD": process.env.NEXT_PUBLIC_MARKET_BTC || "0xaaeE42E6988C5A90Fe3Cd3FE91d23efC15e7Fe17"
   }
@@ -38,8 +38,10 @@ export const CONTRACT_ADDRESSES = {
 export const FLUX_MARKET_ABI = [
   {
     inputs: [
-      { internalType: "uint256", name: "epochId", type: "uint256" },
-      { internalType: "uint8", name: "direction", type: "uint8" }
+      { internalType: "bool", name: "isLong", type: "bool" },
+      { internalType: "uint256", name: "leverage", type: "uint256" },
+      { internalType: "uint256", name: "maxPriceSlippage", type: "uint256" },
+      { internalType: "bytes[]", name: "pythPriceUpdate", type: "bytes[]" }
     ],
     name: "openPosition",
     outputs: [],
@@ -47,40 +49,43 @@ export const FLUX_MARKET_ABI = [
     type: "function"
   },
   {
-    inputs: [{ internalType: "uint256", name: "epochId", type: "uint256" }],
-    name: "calculateBlockFundingRate",
-    outputs: [{ internalType: "int256", name: "", type: "int256" }],
+    inputs: [
+      { internalType: "uint256", name: "minPriceSlippage", type: "uint256" },
+      { internalType: "bytes[]", name: "pythPriceUpdate", type: "bytes[]" }
+    ],
+    name: "closePosition",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function"
+  },
+  {
+    inputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "positions",
+    outputs: [
+      { internalType: "uint128", name: "margin", type: "uint128" },
+      { internalType: "uint128", name: "size", type: "uint128" },
+      { internalType: "uint128", name: "entryPrice", type: "uint128" },
+      { internalType: "int128", name: "entryFundingIndex", type: "int128" },
+      { internalType: "uint32", name: "lastUpdatedBlock", type: "uint32" },
+      { internalType: "bool", name: "isLong", type: "bool" },
+      { internalType: "bool", name: "isActive", type: "bool" }
+    ],
     stateMutability: "view",
     type: "function"
   },
   {
-    inputs: [{ internalType: "uint256", name: "epochId", type: "uint256" }],
-    name: "claimPayout",
+    inputs: [],
+    name: "checkpointFundingRate",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function"
   },
   {
     inputs: [],
-    name: "currentEpochId",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function"
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    name: "epochs",
+    name: "aggregateTotalOI",
     outputs: [
-      { internalType: "uint256", name: "startTimestamp", type: "uint256" },
-      { internalType: "uint256", name: "lockTimestamp", type: "uint256" },
-      { internalType: "uint256", name: "closeTimestamp", type: "uint256" },
-      { internalType: "int64", name: "lockPrice", type: "int64" },
-      { internalType: "int64", name: "closePrice", type: "int64" },
-      { internalType: "uint256", name: "totalLongAmount", type: "uint256" },
-      { internalType: "uint256", name: "totalShortAmount", type: "uint256" },
-      { internalType: "int256", name: "blockFundingRateBps", type: "int256" },
-      { internalType: "bool", name: "resolved", type: "bool" },
-      { internalType: "uint8", name: "winningDirection", type: "uint8" }
+      { internalType: "uint256", name: "totalLongOI", type: "uint256" },
+      { internalType: "uint256", name: "totalShortOI", type: "uint256" }
     ],
     stateMutability: "view",
     type: "function"
