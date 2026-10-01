@@ -147,28 +147,20 @@ export default function FluxGamingTerminal() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch real onchain MON balance and synchronize persistent margin account
+  // Fetch real onchain MON balance directly from Monad Testnet RPC
   const fetchRealBalance = async (address) => {
     try {
       const publicClient = getPublicClient();
       const rawBalance = await publicClient.getBalance({ address });
-      const exactEtherStr = formatEther(rawBalance); const formatted = parseFloat(exactEtherStr);
+      const exactEtherStr = formatEther(rawBalance);
+      const formatted = parseFloat(exactEtherStr);
       setOnchainWalletBalance(formatted);
-
-      if (typeof window !== "undefined") {
-        const savedTestnetBal = localStorage.getItem("flux_testnet_margin_" + address.toLowerCase());
-        if (savedTestnetBal !== null) {
-          const parsed = parseFloat(savedTestnetBal);
-          if (!isNaN(parsed)) {
-            setTestnetMarginBalance(parsed);
-            if (!isPilotMode) setUserBalance(parsed);
-            return;
-          }
-        }
-      }
-      // Default to their wallet balance for live trading
       setTestnetMarginBalance(formatted);
-      if (!isPilotMode) setUserBalance(formatted);
+
+      if (!isPilotMode) {
+        setUserBalance(formatted);
+      }
+
       if (typeof window !== "undefined") {
         localStorage.setItem("flux_testnet_margin_" + address.toLowerCase(), formatted.toString());
       }
@@ -377,12 +369,14 @@ export default function FluxGamingTerminal() {
         }
       } catch (err) {
         console.warn("Onchain openPosition error:", err);
-        if (err.message && err.message.includes("User rejected")) {
-          setIsSubmitting(false);
-          setTxToast(null);
-          alert("Transaction cancelled in wallet.");
-          return;
-        }
+        // Rollback balance deduction since transaction did not go through
+        await fetchRealBalance(walletAddress);
+        setIsSubmitting(false);
+        setTxToast(null);
+        alert(err.message && err.message.includes("User rejected") 
+          ? "Transaction cancelled in wallet." 
+          : "Onchain transaction failed. Please check your gas / network.");
+        return;
       }
     }
 
