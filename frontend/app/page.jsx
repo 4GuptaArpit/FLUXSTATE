@@ -35,10 +35,14 @@ export default function FluxGamingTerminal() {
   const [margin, setMargin] = useState("10");
   const [leverage, setLeverage] = useState(10);
   const [userBalance, setUserBalance] = useState(1000.0);
+  const [sandboxBalance, setSandboxBalance] = useState(1000.0);
+  const [testnetMarginBalance, setTestnetMarginBalance] = useState(0.0);
   const [onchainWalletBalance, setOnchainWalletBalance] = useState(null);
-  const [isPilotMode, setIsPilotMode] = useState(true);
+  const [isPilotMode, setIsPilotMode] = useState(false);
   const [is1ClickTrading, setIs1ClickTrading] = useState(true);
   const [activePosition, setActivePosition] = useState(null);
+  const [sandboxHistory, setSandboxHistory] = useState([]);
+  const [testnetHistory, setTestnetHistory] = useState([]);
   const defaultHistory = [
     {
       id: 881,
@@ -148,38 +152,57 @@ export default function FluxGamingTerminal() {
     try {
       const publicClient = getPublicClient();
       const rawBalance = await publicClient.getBalance({ address });
-      const formatted = parseFloat(formatEther(rawBalance));
+      const exactEtherStr = formatEther(rawBalance); const formatted = parseFloat(exactEtherStr);
       setOnchainWalletBalance(formatted);
-      setIsPilotMode(false);
 
-      // Check if user already has an active trading account balance saved locally
       if (typeof window !== "undefined") {
-        const savedAccountBal = localStorage.getItem("flux_margin_balance_" + address.toLowerCase());
-        if (savedAccountBal !== null) {
-          const parsed = parseFloat(savedAccountBal);
+        const savedTestnetBal = localStorage.getItem("flux_testnet_margin_" + address.toLowerCase());
+        if (savedTestnetBal !== null) {
+          const parsed = parseFloat(savedTestnetBal);
           if (!isNaN(parsed)) {
-            setUserBalance(parsed);
+            setTestnetMarginBalance(parsed);
+            if (!isPilotMode) setUserBalance(parsed);
             return;
           }
         }
       }
-      // If first time connecting, initialize margin account with their wallet balance
-      setUserBalance(formatted);
+      // Default to their wallet balance for live trading
+      setTestnetMarginBalance(formatted);
+      if (!isPilotMode) setUserBalance(formatted);
       if (typeof window !== "undefined") {
-        localStorage.setItem("flux_margin_balance_" + address.toLowerCase(), formatted.toString());
+        localStorage.setItem("flux_testnet_margin_" + address.toLowerCase(), formatted.toString());
       }
     } catch (err) {
       console.warn("Could not fetch onchain balance:", err);
     }
   };
 
-  // Helper to persist updated trading margin balance
+  // Helper to persist updated trading margin balance per mode
   const updateTradingBalance = (newBal) => {
     setUserBalance(newBal);
-    if (typeof window !== "undefined" && walletAddress) {
-      localStorage.setItem("flux_margin_balance_" + walletAddress.toLowerCase(), newBal.toString());
-    } else if (typeof window !== "undefined") {
-      localStorage.setItem("flux_margin_balance_pilot", newBal.toString());
+    if (typeof window !== "undefined") {
+      if (isPilotMode) {
+        setSandboxBalance(newBal);
+        localStorage.setItem("flux_sandbox_margin", newBal.toString());
+      } else if (walletAddress) {
+        setTestnetMarginBalance(newBal);
+        localStorage.setItem("flux_testnet_margin_" + walletAddress.toLowerCase(), newBal.toString());
+      }
+    }
+  };
+
+  // Switch between Pilot Sandbox and Live Testnet modes cleanly
+  const toggleMode = (targetIsPilot) => {
+    setIsPilotMode(targetIsPilot);
+    if (targetIsPilot) {
+      setUserBalance(sandboxBalance);
+    } else {
+      if (walletAddress) {
+        setUserBalance(testnetMarginBalance > 0 ? testnetMarginBalance : (onchainWalletBalance || 0));
+        fetchRealBalance(walletAddress);
+      } else {
+        handleConnectWallet();
+      }
     }
   };
 
@@ -214,20 +237,35 @@ export default function FluxGamingTerminal() {
     }
   };
 
-  // Hydrate persistent trade history after client mount (fixes SSR hydration mismatch)
+  // Hydrate persistent trade history and sandbox balances after client mount
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("flux_trade_history");
-      if (saved) {
+      // Hydrate sandbox balance
+      const savedSandBal = localStorage.getItem("flux_sandbox_margin");
+      if (savedSandBal !== null) {
+        const p = parseFloat(savedSandBal);
+        if (!isNaN(p)) setSandboxBalance(p);
+      }
+
+      // Hydrate sandbox history
+      const savedSandHist = localStorage.getItem("flux_sandbox_history");
+      if (savedSandHist) {
         try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setTradeHistory(parsed);
-          }
-        } catch (e) {
-          console.warn("Could not parse saved history:", e);
-        }
+          const parsed = JSON.parse(savedSandHist);
+          if (Array.isArray(parsed)) setSandboxHistory(parsed);
+        } catch (e) {}
+      } else {
+        setSandboxHistory(defaultHistory);
+      }
+
+      // Hydrate testnet history
+      const savedTestHist = localStorage.getItem("flux_testnet_history");
+      if (savedTestHist) {
+        try {
+          const parsed = JSON.parse(savedTestHist);
+          if (Array.isArray(parsed)) setTestnetHistory(parsed);
+        } catch (e) {}
       }
     }
   }, []);
@@ -444,13 +482,23 @@ export default function FluxGamingTerminal() {
       time: "Just now"
     };
 
-    setTradeHistory((prev) => {
-      const updated = [historyEntry, ...prev.slice(0, 9)];
-      if (typeof window !== "undefined") {
-        localStorage.setItem("flux_trade_history", JSON.stringify(updated));
-      }
-      return updated;
-    });
+    if (isPilotMode) {
+      setSandboxHistory((prev) => {
+        const updated = [historyEntry, ...prev.slice(0, 9)];
+        if (typeof window !== "undefined") {
+          localStorage.setItem("flux_sandbox_history", JSON.stringify(updated));
+        }
+        return updated;
+      });
+    } else {
+      setTestnetHistory((prev) => {
+        const updated = [historyEntry, ...prev.slice(0, 9)];
+        if (typeof window !== "undefined") {
+          localStorage.setItem("flux_testnet_history", JSON.stringify(updated));
+        }
+        return updated;
+      });
+    }
 
     setTxToast({
       title: pnl >= 0 ? "PROFIT SETTLED & PAID" : "POSITION CLOSED",
@@ -532,16 +580,8 @@ export default function FluxGamingTerminal() {
         <div className="flex items-center space-x-3">
           {/* Mode Pill Indicator */}
           <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-xl border font-mono text-xs cursor-pointer select-none transition-all duration-300"
-            onClick={() => {
-              if (isPilotMode && !walletAddress) {
-                handleConnectWallet();
-              } else {
-                setIsPilotMode(!isPilotMode);
-                if (!isPilotMode) setUserBalance(1000.0);
-                else if (walletAddress) fetchRealBalance(walletAddress);
-              }
-            }}
-            title="Click to toggle between Live Testnet and Pilot Sandbox Mode"
+            onClick={() => toggleMode(!isPilotMode)}
+            title="Click to switch environments: Live Testnet (Onchain) vs Pilot Sandbox"
           >
             <span className={"w-2 h-2 rounded-full " + (isPilotMode ? "bg-amber-400 animate-pulse" : "bg-emerald-400 animate-ping")} />
             <span className={isPilotMode ? "text-amber-300 font-bold" : "text-emerald-300 font-bold"}>
@@ -549,21 +589,11 @@ export default function FluxGamingTerminal() {
             </span>
           </div>
 
-          <div className="hidden sm:flex items-center space-x-3 bg-[#0C0726] border border-cyan-500/40 px-3.5 py-1.5 rounded-xl font-mono text-xs">
-            <div className="flex flex-col text-left">
-              <span className="text-[10px] text-slate-400 leading-tight">PERP MARGIN:</span>
-              <span className="text-sm font-black text-cyan-300 leading-tight">
-                {userBalance.toFixed(4)} MON
-              </span>
-            </div>
-            {onchainWalletBalance !== null && (
-              <div className="flex flex-col text-left border-l border-purple-900/60 pl-3">
-                <span className="text-[10px] text-purple-300/70 leading-tight">L1 GAS:</span>
-                <span className="text-xs font-bold text-slate-300 leading-tight">
-                  {onchainWalletBalance.toFixed(4)} MON
-                </span>
-              </div>
-            )}
+          <div className="hidden sm:flex items-center space-x-2 bg-[#0C0726] border border-cyan-500/40 px-4 py-2 rounded-xl font-mono">
+            <span className="text-xs text-slate-400">BALANCE:</span>
+            <span className="text-sm font-black text-cyan-300">
+              {userBalance.toFixed(5)} MON
+            </span>
           </div>
 
           <button
@@ -735,7 +765,7 @@ export default function FluxGamingTerminal() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-purple-900/20">
-                  {tradeHistory.map((trade, idx) => (
+                  {(isPilotMode ? sandboxHistory : testnetHistory).map((trade, idx) => (
                     <tr key={idx} className="hover:bg-purple-950/20 transition-colors">
                       <td className="py-3 text-slate-300 font-bold">#{trade.id}</td>
                       <td>
@@ -753,8 +783,12 @@ export default function FluxGamingTerminal() {
                         {(trade.pnl >= 0 ? "+" : "") + trade.pnl} MON ({trade.pnlPercent})
                       </td>
                       <td>
-                        <span className="text-[10px] text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30">
-                          SETTLED
+                        <span className={"text-[10px] px-2 py-0.5 rounded border " + (
+                          isPilotMode 
+                            ? "text-amber-300 bg-amber-950/60 border-amber-500/30" 
+                            : "text-emerald-300 bg-emerald-950/60 border-emerald-500/30"
+                        )}>
+                          {isPilotMode ? "SIMULATED" : "ONCHAIN MINED"}
                         </span>
                       </td>
                     </tr>
@@ -797,7 +831,7 @@ export default function FluxGamingTerminal() {
               <div className="mt-5">
                 <div className="flex justify-between text-xs font-mono text-purple-300/80 mb-2">
                   <span>MARGIN DEPOSIT</span>
-                  <span className="text-cyan-300 font-bold">BAL: {userBalance.toFixed(4)} MON</span>
+                  <span className="text-cyan-300 font-bold">BAL: {userBalance.toFixed(5)} MON</span>
                 </div>
                 <div className="relative flex items-center">
                   <input
