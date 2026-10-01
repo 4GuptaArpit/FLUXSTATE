@@ -92,11 +92,15 @@ export const FLUX_MARKET_ABI = [
   }
 ];
 
+let _publicClient = null;
+
 export function getPublicClient() {
-  return createPublicClient({
+  if (_publicClient) return _publicClient;
+  _publicClient = createPublicClient({
     chain: monadTestnet,
     transport: http(),
   });
+  return _publicClient;
 }
 
 export function getWalletClient() {

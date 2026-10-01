@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const marketArtifact = JSON.parse(fs.readFileSync("./artifacts/src/FluxMarket.sol/FluxMarket.json", "utf8"));
-const vaultArtifact = JSON.parse(fs.readFileSync("./artifacts/src/core/FluxVault.sol/FluxVault.json", "utf8"));
-const fundingArtifact = JSON.parse(fs.readFileSync("./artifacts/src/engines/FluxFundingEngine.sol/FluxFundingEngine.json", "utf8"));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const marketArtifact = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../artifacts/src/FluxMarket.sol/FluxMarket.json"), "utf8"));
+const vaultArtifact = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../artifacts/src/core/FluxVault.sol/FluxVault.json"), "utf8"));
+const fundingArtifact = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../artifacts/src/engines/FluxFundingEngine.sol/FluxFundingEngine.json"), "utf8"));
 
 test("S-Tier Contract Architecture & Invariant Validation", () => {
   // 1. Verify Core Contract ABIs

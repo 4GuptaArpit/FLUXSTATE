@@ -35,7 +35,11 @@ if (!MARKET_ADDR) {
 }
 
 // 2. Resolve Keeper Account
-const KEEPER_KEY = process.env.KEEPER_PRIVATE_KEY || '0x175f15964812563d7b591e3a734d1bf917883abb149f3c7f8acacaa5345c8d53';
+const KEEPER_KEY = process.env.KEEPER_PRIVATE_KEY || process.env.PRIVATE_KEY;
+if (!KEEPER_KEY) {
+  console.error("FATAL: Neither KEEPER_PRIVATE_KEY nor PRIVATE_KEY is defined in environment.");
+  process.exit(1);
+}
 const account = privateKeyToAccount(KEEPER_KEY);
 
 const transport = http(monadTestnet.rpcUrls.default.http[0]);

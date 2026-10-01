@@ -193,7 +193,11 @@ contract FluxMarket is ShardedAccumulator {
         emit PositionLiquidated(trader, msg.sender, currentPrice, keeperBounty);
     }
 
+    uint256 public lastCheckpointBlock;
+    
     function checkpointFundingRate() external {
+        require(block.number > lastCheckpointBlock, "Already checkpointed this block");
+        lastCheckpointBlock = block.number;
         (uint256 totalLongs, uint256 totalShorts) = aggregateTotalOI();
         fundingEngine.updateFundingIndex(totalLongs, totalShorts);
     }

@@ -32,10 +32,10 @@ FluxState unlocks high-frequency, sub-second financial derivatives natively tail
 - **Institutional Cyberpunk Terminal:** Featuring an interactive Waveform & Candlestick Pulse Chart, 1x–50x Micro-Leverage Cockpit, Semicircular SVG Block Funding Gauge, 500-Order Storm Simulator, and Top Parallel Traders Leaderboard.
 
 ### 5. Live Verified Contract Addresses (Monad Testnet 10143)
-- **FluxMarket [MON/USD]:** `0xca45eee4bEc9B4dE2fFCD82C6d36eFB524A02176` ([MonadScan Link](https://testnet.monadscan.com/address/0xca45eee4bEc9B4dE2fFCD82C6d36eFB524A02176))
-- **FluxMarket [ETH/USD]:** `0x786e11A957677c8A17F08Db2cA75C7ABDA127E6C` ([MonadScan Link](https://testnet.monadscan.com/address/0x786e11A957677c8A17F08Db2cA75C7ABDA127E6C))
-- **FluxMarket [BTC/USD]:** `0xaaeE42E6988C5A90Fe3Cd3FE91d23efC15e7Fe17` ([MonadScan Link](https://testnet.monadscan.com/address/0xaaeE42E6988C5A90Fe3Cd3FE91d23efC15e7Fe17))
-- **Shared Pyth Oracle:** `0x9438B88C0BcF1dD58AA0F86D5C1a7761b5D39AAC` ([MonadScan Link](https://testnet.monadscan.com/address/0x9438B88C0BcF1dD58AA0F86D5C1a7761b5D39AAC))
+- **FluxMarket [MON/USD]:** `0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5` ([MonadScan Link](https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5))
+- **FluxVault (LP & Bad-Debt):** `0x5047f8d761dcE6edf7b2171b123e0A758056d914` ([MonadScan Link](https://testnet.monadscan.com/address/0x5047f8d761dcE6edf7b2171b123e0A758056d914))
+- **FluxFundingEngine:** `0xBF76d0d245fED0C1279c6719cBe27635805533B2` ([MonadScan Link](https://testnet.monadscan.com/address/0xBF76d0d245fED0C1279c6719cBe27635805533B2))
+- **Shared Pyth Oracle:** `0xc547C6f06495690cEd525EDd8Eaf4C17484b0C39` ([MonadScan Link](https://testnet.monadscan.com/address/0xc547C6f06495690cEd525EDd8Eaf4C17484b0C39))
 - **Deployer / Keeper:** `0xf16339204932583020D9c5e00bdED8928B0def15` ([MonadScan Link](https://testnet.monadscan.com/address/0xf16339204932583020D9c5e00bdED8928B0def15))
 
 ### 6. Security Audit Verification

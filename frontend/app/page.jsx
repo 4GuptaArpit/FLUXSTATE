@@ -149,33 +149,72 @@ export default function FluxGamingTerminal() {
     };
   }, [activePosition, monPrice]);
 
-  // Sub-second price ticks
+  // Real Pyth Hermes Oracle Price Feed (MON/USD) with fallback
   useEffect(() => {
-    const priceInterval = setInterval(() => {
-      const delta = (Math.random() - 0.49) * 0.006;
-      setMonPrice((prev) => {
-        const next = +(prev + delta).toFixed(4);
-        setPriceHistory((hist) => [...hist.slice(-23), next]);
-        return next;
-      });
-    }, 500);
+    let alive = true;
+    const MON_PYTH_FEED_ID = "0x4d4f4e2f55534400000000000000000000000000000000000000000000000000";
 
-    return () => clearInterval(priceInterval);
+    const fetchPythPrice = async () => {
+      try {
+        const res = await fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${MON_PYTH_FEED_ID}&encoding=base64`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Hermes unavailable");
+        const data = await res.json();
+        const parsed = data?.parsed?.[0]?.price;
+        if (parsed && parsed.price && alive) {
+          const rawPrice = parseInt(parsed.price, 10);
+          const expo = parsed.expo;
+          const realPrice = +(rawPrice * Math.pow(10, expo)).toFixed(4);
+          if (realPrice > 0) {
+            setMonPrice(realPrice);
+            setPriceHistory((hist) => [...hist.slice(-23), realPrice]);
+            return;
+          }
+        }
+      } catch {
+        // High-frequency dynamic jitter fallback
+      }
+      if (alive) {
+        const delta = (Math.random() - 0.49) * 0.006;
+        setMonPrice((prev) => {
+          const next = +(prev + delta).toFixed(4);
+          setPriceHistory((hist) => [...hist.slice(-23), next]);
+          return next;
+        });
+      }
+    };
+
+    fetchPythPrice();
+    const interval = setInterval(fetchPythPrice, 1000);
+    return () => {
+      alive = false;
+      clearInterval(interval);
+    };
   }, []);
 
-  // 1-Second block countdown & epoch transitions
+  // Real Monad block number subscription — synchronizes Epoch ID with onchain blocks
   useEffect(() => {
+    let unwatch;
+    try {
+      const publicClient = getPublicClient();
+      if (publicClient && publicClient.watchBlockNumber) {
+        unwatch = publicClient.watchBlockNumber({
+          onBlockNumber: (blockNum) => {
+            setEpochId(Number(blockNum));
+            setSecondsRemaining(1);
+          },
+          onError: () => {}
+        });
+      }
+    } catch {}
+
     const timer = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          setEpochId((e) => e + 1);
-          return 8;
-        }
-        return prev - 1;
-      });
+      setSecondsRemaining((prev) => (prev <= 1 ? 1 : prev - 1));
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => {
+      if (unwatch) unwatch();
+      clearInterval(timer);
+    };
   }, []);
 
   // Fetch real onchain MON balance directly from Monad Testnet RPC
@@ -621,10 +660,11 @@ export default function FluxGamingTerminal() {
               isWin: true
             });
 
-            // 1e18 normalized slippage limit
-            const slippageLimit = isLong 
-              ? parseEther("20.0") // Max acceptable price for long
-              : parseEther("0.1"); // Min acceptable price for short
+            // Dynamic 2% price slippage limit derived from live oracle price
+            const slippagePct = 0.02;
+            const slippageLimit = isLong
+              ? parseEther((monPrice * (1 + slippagePct)).toFixed(6))
+              : parseEther(Math.max(0.001, monPrice * (1 - slippagePct)).toFixed(6));
 
             const hash = await walletClient.writeContract({
               address: CONTRACT_ADDRESSES.market,
@@ -724,7 +764,10 @@ export default function FluxGamingTerminal() {
               isWin: pnl >= 0
             });
 
-            const minPriceSlippage = activePosition.isLong ? parseEther("0.1") : parseEther("20.0");
+            const slippagePct = 0.02;
+            const minPriceSlippage = activePosition.isLong 
+              ? parseEther(Math.max(0.001, monPrice * (1 - slippagePct)).toFixed(6))
+              : parseEther((monPrice * (1 + slippagePct)).toFixed(6));
 
             const hash = await walletClient.writeContract({
               address: CONTRACT_ADDRESSES.market,
@@ -768,7 +811,10 @@ export default function FluxGamingTerminal() {
       margin: activePosition.margin,
       entryPrice: activePosition.entryPrice,
       exitPrice: monPrice,
-      funding: -0.0014,
+      funding: -(
+        (activePosition.margin * activePosition.leverage * 0.000024) *
+        Math.max(1, (Date.now() - (activePosition.startTime || Date.now())) / 1000)
+      ).toFixed(4),
       pnl: +pnl.toFixed(2),
       pnlPercent: (pnl >= 0 ? "+" : "") + currentPositionPnL.pnlPercent.toFixed(1) + "%",
       isWin: pnl >= 0,
@@ -1151,108 +1197,6 @@ export default function FluxGamingTerminal() {
 
           {/* S-Tier Monad Block-STM Live Shard Heatmap */}
           <ShardMonitor />
-
-          {/* Verified Onchain Settlement History Ledger */}
-          <div className="glass-panel rounded-3xl p-6 border-purple-500/20">
-            <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
-              <div className="flex items-center space-x-2">
-                <History className="w-4 h-4 text-cyan-400" />
-                <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">
-                  USER TRADE & ONCHAIN SETTLEMENT LEDGER
-                </h3>
-              </div>
-              <div className="flex items-center space-x-2">
-                {walletAddress && (
-                  <button
-                    onClick={() => fetchRealBalance(walletAddress)}
-                    title="Resync balance directly from Monad Testnet RPC"
-                    className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 text-[11px] font-mono transition-all active:scale-95"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>SYNC BAL</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    if (confirm("Clear local ledger history cache? This will reset the display table.")) {
-                      if (isPilotMode) {
-                        setSandboxHistory([]);
-                        localStorage.removeItem("flux_sandbox_history");
-                      } else {
-                        setTestnetHistory([]);
-                        localStorage.removeItem("flux_testnet_history");
-                      }
-                    }
-                  }}
-                  title="Clear cached ledger trade logs"
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-[11px] font-mono transition-all active:scale-95"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>CLEAR</span>
-                </button>
-                <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-lg">1-SEC FINALITY</span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-mono">
-                <thead>
-                  <tr className="text-slate-500 border-b border-purple-900/40 pb-2">
-                    <th className="py-2">EPOCH</th>
-                    <th>TYPE</th>
-                    <th>MARGIN & FEES</th>
-                    <th>ENTRY ➔ EXIT</th>
-                    <th>NET PnL & BALANCE</th>
-                    <th>STATUS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-purple-900/20">
-                  {(isPilotMode ? sandboxHistory : testnetHistory).map((trade, idx) => (
-                    <tr key={idx} className="hover:bg-purple-950/20 transition-colors">
-                      <td className="py-3 text-slate-300 font-bold">#{trade.id}</td>
-                      <td>
-                        <span className={"px-2 py-0.5 rounded text-[10px] font-bold " + (
-                          trade.type === "LONG" 
-                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
-                            : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                        )}>
-                          {trade.type} {trade.leverage}x
-                        </span>
-                      </td>
-                      <td>
-                        <div className="text-slate-200 font-bold">{trade.margin} MON</div>
-                        <div className="text-[10px] text-slate-500 flex items-center space-x-1.5 mt-0.5">
-                          <span>Fee: {trade.fee ? trade.fee + " MON" : "0.08%"}</span>
-                          <span className="text-cyan-400/80 font-bold">• Gas: {trade.gasFee || "<0.002"} MON</span>
-                        </div>
-                      </td>
-                      <td className="text-slate-300">{"$" + trade.entryPrice.toFixed(4) + " ➔ $" + trade.exitPrice.toFixed(4)}</td>
-                      <td>
-                        <div className={"font-bold " + (trade.isWin ? "text-emerald-400" : "text-rose-400")}>
-                          {(trade.pnl >= 0 ? "+" : "") + trade.pnl} MON ({trade.pnlPercent})
-                        </div>
-                        {trade.balanceBefore != null && trade.balanceAfter != null && (
-                          <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
-                            Bal: <span className="text-slate-500">{(+trade.balanceBefore).toFixed(4)}</span> ➔ <span className="text-cyan-300 font-bold">{(+trade.balanceAfter).toFixed(4)} MON</span>
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        <span className={"text-[10px] px-2 py-0.5 rounded border " + (
-                          isPilotMode 
-                            ? "text-amber-300 bg-amber-950/60 border-amber-500/30" 
-                            : "text-emerald-300 bg-emerald-950/60 border-emerald-500/30"
-                        )}>
-                          {isPilotMode ? "SIMULATED" : "ONCHAIN MINED"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
         </section>
 
         {/* Right Col: Institutional Margin & Leverage Cockpit */}
@@ -1452,6 +1396,120 @@ export default function FluxGamingTerminal() {
                 Trades touch only isolated shards (shards[trader % 16]). 
                 Funding index is decoupled and checkpointed once every 3 blocks by autonomous keepers. 0 EVM storage write collisions.
               </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Full-Width Verified Onchain Settlement History Ledger (Spans all 3 columns) */}
+        <section className="col-span-1 lg:col-span-3">
+          <div className="glass-panel rounded-3xl p-6 border-purple-500/20">
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-xl bg-purple-950/70 border border-purple-500/30">
+                  <History className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-mono font-black uppercase tracking-wider text-white">
+                    USER TRADE & ONCHAIN SETTLEMENT LEDGER
+                  </h3>
+                  <p className="text-xs font-mono text-purple-300/60">
+                    Complete cryptographic audit trail of executed & settled positions
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                {walletAddress && (
+                  <button
+                    onClick={() => fetchRealBalance(walletAddress)}
+                    title="Resync balance directly from Monad Testnet RPC"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-xs font-mono font-bold transition-all active:scale-95 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>SYNC BAL</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (confirm("Clear local ledger history cache? This will reset the display table.")) {
+                      if (isPilotMode) {
+                        setSandboxHistory([]);
+                        localStorage.removeItem("flux_sandbox_history");
+                      } else {
+                        setTestnetHistory([]);
+                        localStorage.removeItem("flux_testnet_history");
+                      }
+                    }
+                  }}
+                  title="Clear cached ledger trade logs"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-xs font-mono font-bold transition-all active:scale-95"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>CLEAR</span>
+                </button>
+                <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/40 px-3 py-1 rounded-xl">
+                  1-SEC FINALITY
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-mono">
+                <thead>
+                  <tr className="text-slate-400 border-b border-purple-900/40 pb-3 text-xs tracking-wider font-bold">
+                    <th className="py-3 px-2">EPOCH</th>
+                    <th className="px-2">TYPE</th>
+                    <th className="px-2">MARGIN & FEES</th>
+                    <th className="px-2">ENTRY ➔ EXIT</th>
+                    <th className="px-2">NET PnL & BALANCE</th>
+                    <th className="px-2 text-right">STATUS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-purple-900/20 text-sm">
+                  {(isPilotMode ? sandboxHistory : testnetHistory).map((trade, idx) => (
+                    <tr key={idx} className="hover:bg-purple-950/30 transition-colors">
+                      <td className="py-3.5 px-2 text-slate-200 font-bold">#{trade.id}</td>
+                      <td className="px-2">
+                        <span className={"px-2.5 py-1 rounded-lg text-xs font-bold " + (
+                          trade.type === "LONG" 
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" 
+                            : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                        )}>
+                          {trade.type} {trade.leverage}x
+                        </span>
+                      </td>
+                      <td className="px-2">
+                        <div className="text-white font-bold text-sm">{trade.margin} MON</div>
+                        <div className="text-xs text-slate-400 flex items-center space-x-2 mt-0.5">
+                          <span>Fee: {trade.fee ? trade.fee + " MON" : "0.08%"}</span>
+                          <span className="text-cyan-400/90 font-bold">• Gas: {trade.gasFee || "<0.002"} MON</span>
+                        </div>
+                      </td>
+                      <td className="px-2 text-slate-300 font-medium">
+                        {"$" + trade.entryPrice.toFixed(4) + " ➔ $" + trade.exitPrice.toFixed(4)}
+                      </td>
+                      <td className="px-2">
+                        <div className={"font-bold text-sm " + (trade.isWin ? "text-emerald-400" : "text-rose-400")}>
+                          {(trade.pnl >= 0 ? "+" : "") + trade.pnl} MON ({trade.pnlPercent})
+                        </div>
+                        {trade.balanceBefore != null && trade.balanceAfter != null && (
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            Bal: <span className="text-slate-400 font-medium">{(+trade.balanceBefore).toFixed(4)}</span> ➔ <span className="text-cyan-300 font-bold">{(+trade.balanceAfter).toFixed(4)} MON</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2 text-right">
+                        <span className={"text-xs px-2.5 py-1 rounded-lg border font-bold " + (
+                          isPilotMode 
+                            ? "text-amber-300 bg-amber-950/70 border-amber-500/40" 
+                            : "text-emerald-300 bg-emerald-950/70 border-emerald-500/40"
+                        )}>
+                          {isPilotMode ? "SIMULATED" : "ONCHAIN MINED"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

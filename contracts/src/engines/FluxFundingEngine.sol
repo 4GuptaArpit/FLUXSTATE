@@ -33,7 +33,7 @@ contract FluxFundingEngine {
         marketContract = _market;
     }
 
-    function updateFundingIndex(uint256 totalLongs, uint256 totalShorts) external returns (int256) {
+    function updateFundingIndex(uint256 totalLongs, uint256 totalShorts) external onlyMarket returns (int256) {
         uint256 blocksElapsed = block.number - lastFundingBlock;
         if (blocksElapsed == 0) {
             return cumulativeFundingIndex;
