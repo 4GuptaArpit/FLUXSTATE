@@ -20,7 +20,9 @@ import {
   XCircle,
   ArrowUpRight,
   ArrowDownRight,
-  History
+  History,
+  Trash2,
+  RefreshCw
 } from "lucide-react";
 import { getWalletClient, getPublicClient, monadTestnet, FLUX_MARKET_ABI, CONTRACT_ADDRESSES } from "../lib/web3";
 import { formatEther } from "viem";
@@ -164,8 +166,10 @@ export default function FluxGamingTerminal() {
       if (typeof window !== "undefined") {
         localStorage.setItem("flux_testnet_margin_" + address.toLowerCase(), formatted.toString());
       }
+      return formatted;
     } catch (err) {
       console.warn("Could not fetch onchain balance:", err);
+      return null;
     }
   };
 
@@ -323,6 +327,9 @@ export default function FluxGamingTerminal() {
     setIsSubmitting(true);
     const dirStr = isLong ? "LONG" : "SHORT";
 
+    // Snapshot exact starting balance before any deduction
+    const startingBalance = userBalance;
+
     // Deduct margin immediately in state for instant sub-second response
     updateTradingBalance(Math.max(0, +(userBalance - marginNum).toFixed(4)));
 
@@ -387,7 +394,9 @@ export default function FluxGamingTerminal() {
       leverage,
       entryPrice: monPrice,
       sizeUSD: notionalSize * monPrice,
-      startTime: Date.now()
+      startTime: Date.now(),
+      balanceBefore: startingBalance,
+      fee: feeAmount
     };
 
     setActivePosition(newPos);
@@ -415,6 +424,7 @@ export default function FluxGamingTerminal() {
     updateTradingBalance(+(userBalance + finalReturn).toFixed(2));
 
     // If in LIVE TESTNET mode: broadcast real onchain closePosition to settle payout directly to wallet!
+    let freshOnchainBal = null;
     if (!isPilotMode && walletAddress) {
       try {
         const walletClient = getWalletClient();
@@ -449,7 +459,7 @@ export default function FluxGamingTerminal() {
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash });
           console.log("Onchain Position Closed in Block:", receipt.blockNumber);
-          await fetchRealBalance(walletAddress);
+          freshOnchainBal = await fetchRealBalance(walletAddress);
         }
       } catch (err) {
         console.warn("Onchain closePosition error:", err);
@@ -462,6 +472,9 @@ export default function FluxGamingTerminal() {
       }
     }
 
+    const calculatedBal = +(userBalance + finalReturn).toFixed(4);
+    const resolvedBalanceAfter = freshOnchainBal !== null ? freshOnchainBal : calculatedBal;
+
     const historyEntry = {
       id: activePosition.epochId,
       type: activePosition.isLong ? "LONG" : "SHORT",
@@ -473,6 +486,10 @@ export default function FluxGamingTerminal() {
       pnl: +pnl.toFixed(2),
       pnlPercent: (pnl >= 0 ? "+" : "") + currentPositionPnL.pnlPercent.toFixed(1) + "%",
       isWin: pnl >= 0,
+      balanceBefore: activePosition.balanceBefore ? +activePosition.balanceBefore.toFixed(4) : null,
+      balanceAfter: resolvedBalanceAfter,
+      fee: activePosition.fee ? +activePosition.fee.toFixed(4) : +(activePosition.margin * activePosition.leverage * 0.0008).toFixed(4),
+      gasFee: "< 0.002",
       time: "Just now"
     };
 
@@ -534,12 +551,13 @@ export default function FluxGamingTerminal() {
           </div>
 
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2.5">
               <span className="font-black text-2xl tracking-wider uppercase bg-gradient-to-r from-white via-purple-200 to-cyan-400 bg-clip-text text-transparent">
                 FLUXSTATE
               </span>
-              <span className="text-[10px] uppercase font-mono tracking-widest px-2.5 py-0.5 rounded-md bg-purple-950/80 text-purple-300 border border-purple-500/40 shadow-sm">
-                MONAD TESTNET • v2.0-BETA
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-purple-950/60 text-purple-200 border border-purple-500/30 whitespace-nowrap shadow-[0_0_10px_rgba(168,85,247,0.15)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                TESTNET v2.0
               </span>
             </div>
             <div className="flex items-center space-x-2 text-xs text-purple-300/60 font-mono">
@@ -738,12 +756,44 @@ export default function FluxGamingTerminal() {
 
           {/* Verified Onchain Settlement History Ledger */}
           <div className="glass-panel rounded-3xl p-6 border-purple-500/20">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400 flex items-center space-x-2">
+            <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+              <div className="flex items-center space-x-2">
                 <History className="w-4 h-4 text-cyan-400" />
-                <span>USER TRADE & ONCHAIN SETTLEMENT LEDGER</span>
-              </h3>
-              <span className="text-[11px] font-mono text-emerald-400">1-SEC FINALITY</span>
+                <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">
+                  USER TRADE & ONCHAIN SETTLEMENT LEDGER
+                </h3>
+              </div>
+              <div className="flex items-center space-x-2">
+                {walletAddress && (
+                  <button
+                    onClick={() => fetchRealBalance(walletAddress)}
+                    title="Resync balance directly from Monad Testnet RPC"
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 text-[11px] font-mono transition-all active:scale-95"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>SYNC BAL</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (confirm("Clear local ledger history cache? This will reset the display table.")) {
+                      if (isPilotMode) {
+                        setSandboxHistory([]);
+                        localStorage.removeItem("flux_sandbox_history");
+                      } else {
+                        setTestnetHistory([]);
+                        localStorage.removeItem("flux_testnet_history");
+                      }
+                    }
+                  }}
+                  title="Clear cached ledger trade logs"
+                  className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-[11px] font-mono transition-all active:scale-95"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>CLEAR</span>
+                </button>
+                <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-lg">1-SEC FINALITY</span>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -752,9 +802,9 @@ export default function FluxGamingTerminal() {
                   <tr className="text-slate-500 border-b border-purple-900/40 pb-2">
                     <th className="py-2">EPOCH</th>
                     <th>TYPE</th>
-                    <th>MARGIN</th>
+                    <th>MARGIN & FEES</th>
                     <th>ENTRY ➔ EXIT</th>
-                    <th>NET PnL</th>
+                    <th>NET PnL & BALANCE</th>
                     <th>STATUS</th>
                   </tr>
                 </thead>
@@ -771,10 +821,23 @@ export default function FluxGamingTerminal() {
                           {trade.type} {trade.leverage}x
                         </span>
                       </td>
-                      <td className="text-slate-300">{trade.margin} MON</td>
+                      <td>
+                        <div className="text-slate-200 font-bold">{trade.margin} MON</div>
+                        <div className="text-[10px] text-slate-500 flex items-center space-x-1.5 mt-0.5">
+                          <span>Fee: {trade.fee ? trade.fee + " MON" : "0.08%"}</span>
+                          <span className="text-cyan-400/80 font-bold">• Gas: {trade.gasFee || "<0.002"} MON</span>
+                        </div>
+                      </td>
                       <td className="text-slate-300">{"$" + trade.entryPrice.toFixed(4) + " ➔ $" + trade.exitPrice.toFixed(4)}</td>
-                      <td className={"font-bold " + (trade.isWin ? "text-emerald-400" : "text-rose-400")}>
-                        {(trade.pnl >= 0 ? "+" : "") + trade.pnl} MON ({trade.pnlPercent})
+                      <td>
+                        <div className={"font-bold " + (trade.isWin ? "text-emerald-400" : "text-rose-400")}>
+                          {(trade.pnl >= 0 ? "+" : "") + trade.pnl} MON ({trade.pnlPercent})
+                        </div>
+                        {trade.balanceBefore != null && trade.balanceAfter != null && (
+                          <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                            Bal: <span className="text-slate-500">{(+trade.balanceBefore).toFixed(4)}</span> ➔ <span className="text-cyan-300 font-bold">{(+trade.balanceAfter).toFixed(4)} MON</span>
+                          </div>
+                        )}
                       </td>
                       <td>
                         <span className={"text-[10px] px-2 py-0.5 rounded border " + (
@@ -915,6 +978,10 @@ export default function FluxGamingTerminal() {
                 <div className="flex justify-between">
                   <span className="text-slate-400">Protocol Fee (0.08%):</span>
                   <span className="text-slate-300">{feeAmount.toFixed(4)} MON</span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-purple-900/20">
+                  <span className="text-slate-400">Est. Monad L1 Gas:</span>
+                  <span className="text-cyan-300 font-bold">~0.002 MON (&lt; $0.01)</span>
                 </div>
               </div>
 
