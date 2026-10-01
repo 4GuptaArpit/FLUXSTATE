@@ -27,7 +27,11 @@ import {
   Unlock,
   Key,
   ShieldAlert,
-  HelpCircle
+  HelpCircle,
+  LogOut,
+  Copy,
+  ExternalLink,
+  ChevronDown
 } from "lucide-react";
 import { getWalletClient, getPublicClient, monadTestnet, FLUX_MARKET_ABI, CONTRACT_ADDRESSES } from "../lib/web3";
 import { 
@@ -60,6 +64,8 @@ export default function FluxGamingTerminal() {
   const [activeSession, setActiveSession] = useState(null);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
   const [sessionStorageType, setSessionStorageType] = useState("local"); // 'local' | 'session'
   const [sessionPinInput, setSessionPinInput] = useState("");
   const [unlockPinInput, setUnlockPinInput] = useState("");
@@ -477,6 +483,34 @@ export default function FluxGamingTerminal() {
     }
   };
 
+  // Disconnect / Log out of connected wallet
+  const handleDisconnectWallet = () => {
+    revokeSession();
+    setActiveSession(null);
+    setIs1ClickTrading(false);
+    setWalletAddress(null);
+    setShowAccountDropdown(false);
+    setIsPilotMode(true);
+    setUserBalance(sandboxBalance > 0 ? sandboxBalance : 1000.0);
+    setTxToast({
+      title: "WALLET DISCONNECTED",
+      amount: "Logged Out",
+      detail: "Switched to Pilot Sandbox Mode (1,000 MON).",
+      type: "CLOSE",
+      isWin: false
+    });
+    setTimeout(() => setTxToast(null), 3500);
+  };
+
+  // Copy wallet address to clipboard
+  const handleCopyAddress = () => {
+    if (walletAddress && typeof navigator !== "undefined") {
+      navigator.clipboard.writeText(walletAddress);
+      setCopiedAddress(true);
+      setTimeout(() => setCopiedAddress(false), 2000);
+    }
+  };
+
   // Revoke active session
   const handleRevokeSession = () => {
     revokeSession();
@@ -851,17 +885,81 @@ export default function FluxGamingTerminal() {
             </span>
           </div>
 
-          <button
-            onClick={handleConnectWallet}
-            className={"group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-mono text-xs font-black uppercase tracking-wider text-white transition-all " + (
-              walletAddress 
-                ? "bg-gradient-to-r from-purple-800 to-indigo-900 border border-purple-500/50 hover:border-cyan-400"
-                : "bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 neon-glow-purple active:scale-95"
+          {/* Wallet Connect / Account Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                if (walletAddress) {
+                  setShowAccountDropdown(!showAccountDropdown);
+                } else {
+                  handleConnectWallet();
+                }
+              }}
+              className={"group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-mono text-xs font-black uppercase tracking-wider text-white transition-all " + (
+                walletAddress 
+                  ? "bg-gradient-to-r from-purple-800 to-indigo-900 border border-purple-500/50 hover:border-cyan-400"
+                  : "bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 neon-glow-purple active:scale-95"
+              )}
+            >
+              <Wallet className="w-4 h-4 text-cyan-200" />
+              <span>{walletAddress ? (walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4)) : "CONNECT WALLET"}</span>
+              {walletAddress && <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-transform" />}
+            </button>
+
+            {/* Account Menu Dropdown */}
+            {walletAddress && showAccountDropdown && (
+              <div className="absolute right-0 mt-2 w-72 bg-[#0C0626] border border-purple-500/40 rounded-2xl p-4 shadow-[0_15px_50px_rgba(0,0,0,0.9)] z-[100] font-mono text-xs space-y-3">
+                <div className="flex items-center justify-between pb-3 border-b border-purple-900/40">
+                  <span className="text-slate-400">CONNECTED WALLET</span>
+                  <span className="text-[10px] text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/40 font-bold">
+                    MONAD TESTNET
+                  </span>
+                </div>
+
+                {/* Address with Copy Button */}
+                <div className="bg-[#070318] p-3 rounded-xl border border-purple-900/50 flex items-center justify-between">
+                  <div className="truncate text-slate-200 font-bold mr-2 text-[11px]">
+                    {walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
+                  </div>
+                  <button
+                    onClick={handleCopyAddress}
+                    title="Copy full address to clipboard"
+                    className="p-1.5 rounded-lg bg-purple-900/40 hover:bg-cyan-950 hover:text-cyan-300 text-slate-400 transition-colors"
+                  >
+                    {copiedAddress ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* Balance readout */}
+                <div className="flex justify-between items-center px-1 text-slate-300">
+                  <span className="text-slate-400">Wallet Balance:</span>
+                  <span className="text-cyan-300 font-bold">{userBalance.toFixed(5)} MON</span>
+                </div>
+
+                {/* Monad Explorer Link */}
+                <a
+                  href={`https://testnet.monadexplorer.com/address/${walletAddress}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between px-3 py-2 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-slate-300 hover:text-white transition-colors"
+                >
+                  <span className="text-[11px]">View on MonadExplorer</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                </a>
+
+                {/* Log Out / Disconnect Button */}
+                <div className="pt-2 border-t border-purple-900/40">
+                  <button
+                    onClick={handleDisconnectWallet}
+                    className="w-full py-2.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 text-rose-300 font-bold flex items-center justify-center space-x-2 transition-all active:scale-95"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>LOG OUT / DISCONNECT</span>
+                  </button>
+                </div>
+              </div>
             )}
-          >
-            <Wallet className="w-4 h-4 text-cyan-200" />
-            <span>{walletAddress ? (walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4)) : "CONNECT WALLET"}</span>
-          </button>
+          </div>
         </div>
       </header>
 
