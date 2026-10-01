@@ -887,14 +887,18 @@ export default function FluxGamingTerminal() {
             </div>
           )}
 
-          {/* Mode Pill Indicator */}
-          <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-xl border font-mono text-xs cursor-pointer select-none transition-all duration-300"
-            onClick={() => toggleMode(!isPilotMode)}
-            title="Click to switch environments: Live Testnet (Onchain) vs Pilot Sandbox"
+          {/* Environment Status Badge (Auto-locked to wallet connection state) */}
+          <div 
+            className={"hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-xl border font-mono text-xs select-none " + (
+              walletAddress
+                ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
+                : "bg-amber-950/60 border-amber-500/40 text-amber-300"
+            )}
+            title={walletAddress ? "Connected to Monad Testnet with real wallet" : "Logged out demo mode with 1,000 virtual MON"}
           >
-            <span className={"w-2 h-2 rounded-full " + (isPilotMode ? "bg-amber-400 animate-pulse" : "bg-emerald-400 animate-ping")} />
-            <span className={isPilotMode ? "text-amber-300 font-bold" : "text-emerald-300 font-bold"}>
-              {isPilotMode ? "PILOT SANDBOX" : "LIVE TESTNET"}
+            <span className={"w-2 h-2 rounded-full " + (walletAddress ? "bg-emerald-400 animate-ping" : "bg-amber-400 animate-pulse")} />
+            <span className="font-bold tracking-wider">
+              {walletAddress ? "LIVE TESTNET (ONCHAIN)" : "PILOT SANDBOX (1,000 MON)"}
             </span>
           </div>
 
