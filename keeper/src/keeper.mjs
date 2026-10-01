@@ -1,35 +1,111 @@
-import { createPublicClient, createWalletClient, http, parseAbi } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, formatEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const MONAD_RPC = process.env.MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz';
-const MARKET_ADDR = (process.env.MARKET_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000');
-const KEEPER_KEY = process.env.KEEPER_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+// Define Monad Testnet Chain
+const monadTestnet = {
+  id: 10143,
+  name: 'Monad Testnet',
+  nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 },
+  rpcUrls: {
+    default: { http: [process.env.MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz'] }
+  },
+  testnet: true
+};
 
+// 1. Resolve Contract Address from deployed_addresses.json
+let MARKET_ADDR = process.env.MARKET_CONTRACT_ADDRESS;
+try {
+  const manifestPath = path.resolve('../deployed_addresses.json');
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (manifest.market) {
+      MARKET_ADDR = manifest.market;
+    }
+  }
+} catch (e) {
+  console.warn('Could not read deployed_addresses.json, using fallback.');
+}
+if (!MARKET_ADDR) {
+  MARKET_ADDR = '0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5';
+}
+
+// 2. Resolve Keeper Account
+const KEEPER_KEY = process.env.KEEPER_PRIVATE_KEY || '0x175f15964812563d7b591e3a734d1bf917883abb149f3c7f8acacaa5345c8d53';
 const account = privateKeyToAccount(KEEPER_KEY);
-const publicClient = createPublicClient({ transport: http(MONAD_RPC) });
-const walletClient = createWalletClient({ account, transport: http(MONAD_RPC) });
+
+const transport = http(monadTestnet.rpcUrls.default.http[0]);
+const publicClient = createPublicClient({ chain: monadTestnet, transport });
+const walletClient = createWalletClient({ account, chain: monadTestnet, transport });
 
 const MARKET_ABI = parseAbi([
-  'function positions(address) view returns (uint128 margin, uint128 size, uint128 entryPrice, int128 entryFundingIndex, uint32 lastUpdatedBlock, bool isLong, bool isActive)',
   'function checkpointFundingRate() external',
-  'function liquidate(address trader, bytes[] calldata pythPriceUpdate) external payable'
+  'function aggregateTotalOI() view returns (uint256 totalLongs, uint256 totalShorts)',
+  'function positions(address) view returns (uint128 margin, uint128 size, uint128 entryPrice, int128 entryFundingIndex, uint32 lastUpdatedBlock, bool isLong, bool isActive)'
 ]);
 
 console.log('====================================================');
-console.log('FluxState Autonomous Keeper Daemon initialized');
-console.log('Keeper Address  :', account.address);
-console.log('Target Market   :', MARKET_ADDR);
-console.log('RPC Endpoint    :', MONAD_RPC);
-console.log('Auto Checkpoint : Every 3 blocks (active)');
-console.log('Liquidation Scan: Continuous sub-second MMR sentinel');
+console.log('⚡ FLUXSTATE AUTONOMOUS KEEPER DAEMON');
 console.log('====================================================');
+console.log('Network         : Monad Testnet (Chain ID 10143)');
+console.log('Keeper Address  :', account.address);
+console.log('Market Contract :', MARKET_ADDR);
+console.log('Cadence         : Every 3 Seconds (Block-by-Block Funding)');
+console.log('====================================================\n');
 
-export async function runKeeperCycle(blockNumber = 1000n) {
-  console.log('[KEEPER] Running block cycle #' + blockNumber);
-  return { success: true, checkpointed: true };
+let isProcessing = false;
+let checkpointCount = 0;
+
+export async function runKeeperCycle() {
+  if (isProcessing) return;
+  isProcessing = true;
+
+  try {
+    const blockNumber = await publicClient.getBlockNumber();
+    const balance = await publicClient.getBalance({ address: account.address });
+
+    console.log(`[BLOCK #${blockNumber}] Keeper Heartbeat | Balance: ${parseFloat(formatEther(balance)).toFixed(4)} MON`);
+
+    // 1. Read Total Open Interest across all 16 isolated storage shards
+    const [totalLongs, totalShorts] = await publicClient.readContract({
+      address: MARKET_ADDR,
+      abi: MARKET_ABI,
+      functionName: 'aggregateTotalOI'
+    });
+
+    console.log(`  └─ Shard Matrix OI: Longs = ${formatEther(totalLongs)} MON | Shorts = ${formatEther(totalShorts)} MON`);
+
+    // 2. Broadcast onchain checkpoint to update continuous funding index
+    console.log('  └─ Submitting checkpointFundingRate()...');
+    const hash = await walletClient.writeContract({
+      address: MARKET_ADDR,
+      abi: MARKET_ABI,
+      functionName: 'checkpointFundingRate'
+    });
+
+    checkpointCount++;
+    console.log(`  ✓ Checkpoint #${checkpointCount} mined! Tx Hash: ${hash}`);
+  } catch (err) {
+    if (err.message && err.message.includes('Already configured')) {
+      // transient state
+    } else {
+      console.warn('  ⚠️ Keeper cycle warning:', err.shortMessage || err.message);
+    }
+  } finally {
+    isProcessing = false;
+  }
 }
 
-runKeeperCycle().catch(console.error);
+// Execute initial heartbeat and run every 3 seconds continuously
+runKeeperCycle();
+const interval = setInterval(runKeeperCycle, 3000);
+
+process.on('SIGINT', () => {
+  clearInterval(interval);
+  console.log('\nKeeper daemon terminated cleanly.');
+  process.exit(0);
+});

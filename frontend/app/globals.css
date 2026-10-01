@@ -12,6 +12,19 @@ body {
   color: #F8FAFC;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
+  /* Prevent accidental text highlight across the app like a native desktop terminal */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Allow selection specifically for text inputs and table records that traders copy */
+input, textarea, [contenteditable="true"], .selectable {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
 /* Hide native browser up/down number spin arrows */
