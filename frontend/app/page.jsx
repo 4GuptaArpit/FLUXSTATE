@@ -253,6 +253,9 @@ export default function FluxGamingTerminal() {
           await walletClient.addChain({ chain: monadTestnet });
         }
       }
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("flux_wallet_disconnected");
+      }
       setWalletAddress(address);
       setIsPilotMode(false);
       await fetchRealBalance(address);
@@ -297,19 +300,33 @@ export default function FluxGamingTerminal() {
   // Auto-detect wallet if already authorized and listen to account/chain switches
   useEffect(() => {
     if (typeof window !== "undefined" && window.ethereum) {
-      window.ethereum.request({ method: "eth_accounts" })
-        .then((accounts) => {
-          if (accounts && accounts.length > 0) {
-            setWalletAddress(accounts[0]);
-            setIsPilotMode(false);
-            fetchRealBalance(accounts[0]);
-          } else {
+      // Check if user explicitly disconnected previously
+      const isExplicitlyDisconnected = localStorage.getItem("flux_wallet_disconnected") === "true";
+
+      if (isExplicitlyDisconnected) {
+        setIsPilotMode(true);
+        setUserBalance(sandboxBalance > 0 ? sandboxBalance : 1000.0);
+      } else {
+        window.ethereum.request({ method: "eth_accounts" })
+          .then((accounts) => {
+            if (accounts && accounts.length > 0) {
+              setWalletAddress(accounts[0]);
+              setIsPilotMode(false);
+              fetchRealBalance(accounts[0]);
+            } else {
+              setIsPilotMode(true);
+              setUserBalance(1000.0);
+            }
+          })
+          .catch(() => {
             setIsPilotMode(true);
             setUserBalance(1000.0);
-          }
-        })
+          });
+      }
+
       const handleAccounts = (accounts) => {
         if (accounts && accounts.length > 0) {
+          localStorage.removeItem("flux_wallet_disconnected");
           setWalletAddress(accounts[0]);
           setIsPilotMode(false);
           fetchRealBalance(accounts[0]);
@@ -485,6 +502,9 @@ export default function FluxGamingTerminal() {
 
   // Disconnect / Log out of connected wallet
   const handleDisconnectWallet = () => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("flux_wallet_disconnected", "true");
+    }
     revokeSession();
     setActiveSession(null);
     setIs1ClickTrading(false);
