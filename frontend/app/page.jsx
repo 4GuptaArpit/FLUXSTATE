@@ -64,6 +64,7 @@ export default function FluxGamingTerminal() {
   const [activeSession, setActiveSession] = useState(null);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [sessionStorageType, setSessionStorageType] = useState("local"); // 'local' | 'session'
@@ -201,6 +202,20 @@ export default function FluxGamingTerminal() {
     }
   };
 
+  // Continuous Onchain Balance Sync: Polls RPC every 3 seconds when connected on Live Testnet
+  useEffect(() => {
+    if (!walletAddress || isPilotMode) return;
+
+    // Immediate initial sync
+    fetchRealBalance(walletAddress);
+
+    const syncInterval = setInterval(() => {
+      fetchRealBalance(walletAddress);
+    }, 3000);
+
+    return () => clearInterval(syncInterval);
+  }, [walletAddress, isPilotMode]);
+
   // Helper to persist updated trading margin balance per mode
   const updateTradingBalance = (newBal) => {
     setUserBalance(newBal);
@@ -222,7 +237,6 @@ export default function FluxGamingTerminal() {
       setUserBalance(sandboxBalance);
     } else {
       if (walletAddress) {
-        setUserBalance(testnetMarginBalance > 0 ? testnetMarginBalance : (onchainWalletBalance || 0));
         fetchRealBalance(walletAddress);
       } else {
         handleConnectWallet();
@@ -909,6 +923,16 @@ export default function FluxGamingTerminal() {
             </span>
           </div>
 
+          {/* Quick Guide & Terminal Features Button */}
+          <button
+            onClick={() => setShowGuideModal(true)}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl font-mono text-xs font-bold border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 hover:text-white transition-all shadow-[0_0_12px_rgba(168,85,247,0.2)] active:scale-95"
+            title="Terminal Guide & Feature Highlights"
+          >
+            <HelpCircle className="w-4 h-4 text-cyan-400" />
+            <span className="hidden lg:inline">FEATURES</span>
+          </button>
+
           {/* Wallet Connect / Account Dropdown */}
           <div className="relative">
             <button
@@ -954,10 +978,19 @@ export default function FluxGamingTerminal() {
                   </button>
                 </div>
 
-                {/* Balance readout */}
+                {/* Balance readout with instant sync button */}
                 <div className="flex justify-between items-center px-1 text-slate-300">
                   <span className="text-slate-400">Wallet Balance:</span>
-                  <span className="text-cyan-300 font-bold">{userBalance.toFixed(5)} MON</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-cyan-300 font-bold">{userBalance.toFixed(5)} MON</span>
+                    <button
+                      onClick={() => fetchRealBalance(walletAddress)}
+                      title="Sync with Monad RPC"
+                      className="p-1 rounded bg-purple-950 hover:bg-cyan-950 text-cyan-400 transition-colors"
+                    >
+                      <RefreshCw className="w-3 h-3 hover:rotate-180 transition-transform duration-500" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Monad Explorer Link */}
@@ -1234,33 +1267,46 @@ export default function FluxGamingTerminal() {
                   </h3>
                 </div>
                 
-                {/* 1-Click Session Key Toggle */}
-                <div 
+                {/* 1-Click Session Key Interactive Switch */}
+                <button
+                  type="button"
                   onClick={handleToggle1Click}
-                  className={"flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono cursor-pointer transition-all " + (
+                  className={"group flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-[11px] font-mono cursor-pointer transition-all duration-300 " + (
                     is1ClickTrading 
                       ? (activeSession?.isLocked 
-                          ? "bg-amber-950/80 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.3)]"
-                          : "bg-cyan-950/80 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.3)]") 
-                      : "bg-[#0A051D] border-purple-900/50 text-slate-400 hover:border-purple-600"
+                          ? "bg-amber-950/90 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.35)]"
+                          : "bg-cyan-950/90 border-cyan-400 text-cyan-300 shadow-[0_0_18px_rgba(6,182,212,0.4)]") 
+                      : "bg-[#0C0626] border-purple-500/40 text-purple-200 hover:border-cyan-400 hover:text-white shadow-[0_0_12px_rgba(168,85,247,0.2)] hover:shadow-[0_0_18px_rgba(6,182,212,0.3)] animate-pulse"
                   )}
-                  title={is1ClickTrading ? "Manage active 1-Click Session Key (Lock or Revoke)" : "Enable 1-Click Trading with a 1-time session approval"}
+                  title={is1ClickTrading ? "Manage active 1-Click Session Key (Lock or Revoke)" : "Click to enable 1-Click Trading: 0 MetaMask popups per trade"}
                 >
                   {is1ClickTrading ? (
                     activeSession?.isLocked ? (
-                      <Lock className="w-3 h-3 text-amber-400 animate-pulse" />
+                      <Lock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
                     ) : (
-                      <Zap className="w-3 h-3 text-cyan-400 animate-pulse" />
+                      <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
                     )
                   ) : (
-                    <Key className="w-3 h-3 text-slate-500" />
+                    <Zap className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
                   )}
-                  <span className="font-bold">
+
+                  <span className="font-bold tracking-tight">
                     {is1ClickTrading 
                       ? (activeSession?.isLocked ? "SESSION LOCKED" : "1-CLICK ON (0 POPUPS)") 
-                      : "WALLET PROMPT"}
+                      : "ENABLE 1-CLICK"}
                   </span>
-                </div>
+
+                  {/* Visual Toggle Pill Indicator */}
+                  <div className={"w-8 h-4 rounded-full p-0.5 flex items-center transition-colors duration-300 " + (
+                    is1ClickTrading
+                      ? (activeSession?.isLocked ? "bg-amber-500 justify-end" : "bg-cyan-500 justify-end")
+                      : "bg-purple-900/80 justify-start group-hover:bg-purple-800"
+                  )}>
+                    <div className={"w-3 h-3 rounded-full bg-white shadow-md transform transition-transform duration-300 " + (
+                      is1ClickTrading ? "scale-100" : "scale-90"
+                    )} />
+                  </div>
+                </button>
               </div>
 
               {/* Collateral Input with Custom Steppers */}
@@ -1646,6 +1692,94 @@ export default function FluxGamingTerminal() {
                 className="text-xs font-mono text-rose-400 hover:text-rose-300 underline"
               >
                 Revoke Session & Disconnect 1-Click
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Terminal Features & Guide Modal */}
+      {showGuideModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[10000]">
+          <div className="bg-[#0C0626] border border-purple-500/40 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-[0_0_60px_rgba(168,85,247,0.3)] space-y-6 relative max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-purple-900/40">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-950/80 border border-purple-400/50 flex items-center justify-center">
+                  <HelpCircle className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <h3 className="font-mono font-black text-lg text-white">TERMINAL FEATURES GUIDE</h3>
+                  <p className="text-xs font-mono text-purple-300/70">Master FluxState High-Frequency Perpetuals</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowGuideModal(false)}
+                className="p-1.5 rounded-lg bg-purple-900/40 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Feature Cards Grid */}
+            <div className="space-y-4 font-mono text-xs">
+              
+              {/* Feature 1: 1-Click Session Keys */}
+              <div className="bg-[#070318] p-4 rounded-2xl border border-cyan-500/30 space-y-2">
+                <div className="flex items-center space-x-2 text-cyan-300 font-bold text-sm">
+                  <Zap className="w-4 h-4 text-cyan-400" />
+                  <span>1-CLICK TRADING (0 POPUPS)</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Tired of confirming every market order in MetaMask? Click <strong className="text-cyan-300">ENABLE 1-CLICK</strong> in the Perp Cockpit. Sign once with your wallet to grant an ephemeral in-memory session key. Execute trades in sub-50ms with zero popups!
+                </p>
+                <div className="text-[11px] text-emerald-400/90 bg-emerald-950/40 px-2.5 py-1 rounded border border-emerald-500/20">
+                  ✓ Non-Custodial: Session keys cannot transfer or withdraw funds.
+                </div>
+              </div>
+
+              {/* Feature 2: 24-Hour Quick-PIN Protection */}
+              <div className="bg-[#070318] p-4 rounded-2xl border border-purple-500/30 space-y-2">
+                <div className="flex items-center space-x-2 text-purple-300 font-bold text-sm">
+                  <Lock className="w-4 h-4 text-purple-400" />
+                  <span>24-HOUR QUICK-PIN PERSISTENCE</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Choose <strong className="text-purple-300">Remember for 24 Hours</strong> and set a 4-digit PIN. Your session survives browser reloads. If you walk away for 15 minutes, the terminal auto-locks to protect your funds until you re-enter your PIN.
+                </p>
+              </div>
+
+              {/* Feature 3: Block-By-Block Continuous Funding */}
+              <div className="bg-[#070318] p-4 rounded-2xl border border-emerald-500/30 space-y-2">
+                <div className="flex items-center space-x-2 text-emerald-300 font-bold text-sm">
+                  <Percent className="w-4 h-4 text-emerald-400" />
+                  <span>1-SECOND BLOCK-BY-BLOCK FUNDING</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Unlike traditional DEXes that calculate funding every 8 hours, FluxState calculates and accrues funding on every single 1-second Monad block directly onchain based on real-time net long/short skew.
+                </p>
+              </div>
+
+              {/* Feature 4: 16-Shard Parallel EVM */}
+              <div className="bg-[#070318] p-4 rounded-2xl border border-indigo-500/30 space-y-2">
+                <div className="flex items-center space-x-2 text-indigo-300 font-bold text-sm">
+                  <Cpu className="w-4 h-4 text-indigo-400" />
+                  <span>16-SHARD PARALLEL STORAGE</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  FluxState splits open interest and balances across 16 independent storage shards, maximizing Monad's Block-STM parallel execution engine and eliminating slot lockup aborts.
+                </p>
+              </div>
+
+            </div>
+
+            {/* Close Button */}
+            <div className="pt-2">
+              <button
+                onClick={() => setShowGuideModal(false)}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 font-mono font-bold text-xs uppercase text-white shadow-lg shadow-purple-600/30 transition-all active:scale-95"
+              >
+                GOT IT, LET'S TRADE
               </button>
             </div>
           </div>
