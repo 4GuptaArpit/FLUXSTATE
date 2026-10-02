@@ -98,7 +98,7 @@ export function getPublicClient() {
   if (_publicClient) return _publicClient;
   _publicClient = createPublicClient({
     chain: monadTestnet,
-    transport: http(),
+    transport: http("https://testnet-rpc.monad.xyz"),
   });
   return _publicClient;
 }

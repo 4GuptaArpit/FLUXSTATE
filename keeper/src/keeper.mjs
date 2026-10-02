@@ -94,8 +94,9 @@ export async function runKeeperCycle() {
     checkpointCount++;
     console.log(`  ✓ Checkpoint #${checkpointCount} mined! Tx Hash: ${hash}`);
   } catch (err) {
-    if (err.message && err.message.includes('Already configured')) {
-      // transient state
+    if (err.message && (err.message.includes('Already checkpointed this block') || err.message.includes('Already configured'))) {
+      // Benign block cooldown: another transaction or fast block already triggered checkpoint
+      console.log('  ℹ️ Checkpoint cooldown active (already checkpointed this block)');
     } else {
       console.warn('  ⚠️ Keeper cycle warning:', err.shortMessage || err.message);
     }
