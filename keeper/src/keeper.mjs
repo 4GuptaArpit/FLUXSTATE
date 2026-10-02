@@ -3,8 +3,24 @@ import { privateKeyToAccount } from 'viem/accounts';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import httpModule from 'http';
 
 dotenv.config();
+
+// Built-in HTTP health-check server so Render Free Web Service detects an open port
+const PORT = process.env.PORT || 10000;
+const server = httpModule.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'online',
+    service: 'FluxState Autonomous Keeper Daemon',
+    network: 'Monad Testnet (10143)',
+    timestamp: new Date().toISOString()
+  }));
+});
+server.listen(PORT, () => {
+  console.log(`✓ Health-check HTTP server listening on port ${PORT}`);
+});
 
 // Define Monad Testnet Chain
 const monadTestnet = {
