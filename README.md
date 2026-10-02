@@ -108,7 +108,7 @@ $$
 $$
 
 $$
-\text{Rate per Block} = \text{clamp}\left(\frac{\text{Skew} \times \text{BaseRate}}{10^{18}},\ -0.005\%,\ +0.005\%\right)
+\text{Rate per Block} = \operatorname{clamp}\left(\frac{\text{Skew} \times \text{BaseRate}}{10^{18}},\ -0.00005,\ +0.00005\right)
 $$
 
 $$
