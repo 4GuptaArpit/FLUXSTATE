@@ -979,56 +979,74 @@ export default function FluxGamingTerminal() {
       <div className="absolute -top-40 left-1/4 w-[600px] h-[600px] bg-purple-600/15 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute top-1/2 -right-40 w-[500px] h-[500px] bg-cyan-600/10 rounded-full blur-[140px] pointer-events-none" />
 
+      {/* Network Verification & Security Notice */}
+      <div className="bg-[#09031E] border-b border-purple-900/40 px-3 sm:px-6 py-1.5 text-[11px] font-mono flex items-center justify-between text-purple-200/90 z-50">
+        <div className="flex items-center space-x-2 truncate">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span className="truncate">
+            <strong className="text-white">MONAD TESTNET</strong> • Verified on MonadScan (Non-Custodial). If MetaMask prompts a new-domain warning, click <span className="text-cyan-300 font-bold">&quot;Continue&quot;</span> to trade safely.
+          </span>
+        </div>
+        <a
+          href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 shrink-0 ml-3 hidden md:inline text-[11px]"
+        >
+          View Contract ↗
+        </a>
+      </div>
+
       {/* Cyberpunk Top HUD Navigation */}
-      <header className="px-6 py-4 flex items-center justify-between border-b border-purple-900/30 bg-[#07031C]/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="flex items-center space-x-4">
+      <header className="w-full px-3 sm:px-6 py-3 flex items-center justify-between border-b border-purple-900/30 bg-[#07031C]/90 backdrop-blur-xl sticky top-0 z-50">
+        <div className="flex items-center space-x-3 shrink-0">
           <div className="relative">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-cyan-400 p-[1px] shadow-lg shadow-purple-600/40">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-cyan-400 p-[1px] shadow-lg shadow-purple-600/40">
               <div className="w-full h-full bg-[#07031C] rounded-[15px] flex items-center justify-center">
-                <Crosshair className="w-6 h-6 text-cyan-400 animate-spin" style={{ animationDuration: "12s" }} />
+                <Crosshair className="w-5 h-5 text-cyan-400 animate-spin" style={{ animationDuration: "12s" }} />
               </div>
             </div>
-            <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
+            <span className="absolute -bottom-1 -right-1 flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
             </span>
           </div>
 
           <div>
-            <div className="flex items-center space-x-2.5">
-              <span className="font-black text-2xl tracking-wider uppercase bg-gradient-to-r from-white via-purple-200 to-cyan-400 bg-clip-text text-transparent">
+            <div className="flex items-center space-x-2">
+              <span className="font-black text-xl sm:text-2xl tracking-wider uppercase bg-gradient-to-r from-white via-purple-200 to-cyan-400 bg-clip-text text-transparent">
                 FLUXSTATE
               </span>
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-purple-950/60 text-purple-200 border border-purple-500/30 whitespace-nowrap shadow-[0_0_10px_rgba(168,85,247,0.15)]">
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-purple-950/60 text-purple-200 border border-purple-500/30 whitespace-nowrap shadow-[0_0_10px_rgba(168,85,247,0.15)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                TESTNET v2.0
+                v2.0
               </span>
             </div>
-            <div className="flex items-center space-x-2 text-xs text-purple-300/60 font-mono">
+            <div className="hidden xl:flex items-center space-x-1.5 text-[11px] text-purple-300/60 font-mono">
               <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
               <span>BLOCK-BY-BLOCK FUNDING • 16-SHARD PARALLEL EVM</span>
             </div>
           </div>
         </div>
 
-        {/* Live Monad Telemetry HUD Badges */}
-        <div className="hidden lg:flex items-center space-x-4 text-xs font-mono">
-          <div className="glass-panel px-4 py-2 rounded-xl flex items-center space-x-3 border-emerald-500/20">
-            <Percent className="w-4 h-4 text-emerald-400" />
-            <span className="text-slate-400">BLOCK FUNDING:</span>
+        {/* Live Monad Telemetry HUD Badges (Visible on 2XL screens to never crowd header) */}
+        <div className="hidden 2xl:flex items-center space-x-3 text-xs font-mono">
+          <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center space-x-2 border-emerald-500/20">
+            <Percent className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-slate-400">FUNDING:</span>
             <span className="text-emerald-300 font-black">{blockFundingRateBps}</span>
           </div>
 
-          <div className="glass-panel px-4 py-2 rounded-xl flex items-center space-x-3 border-cyan-500/20">
-            <Gauge className="w-4 h-4 text-cyan-400" />
-            <span className="text-slate-400">SLOT FINALITY:</span>
+          <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center space-x-2 border-cyan-500/20">
+            <Gauge className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-slate-400">FINALITY:</span>
             <span className="text-cyan-300 font-black">1.0s</span>
           </div>
 
-          <div className="glass-panel px-4 py-2 rounded-xl flex items-center space-x-3 border-purple-500/20">
-            <span className="relative flex h-2.5 w-2.5">
+          <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center space-x-2 border-purple-500/20">
+            <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
             <span className="text-slate-400">BLOCK #{epochId}</span>
             {activePosition ? (
@@ -1036,18 +1054,18 @@ export default function FluxGamingTerminal() {
                 {(activePosition.isLong ? "-" : "+") + blockFundingAccrual.toFixed(5)} MON
               </span>
             ) : (
-              <span className="text-purple-300 font-black">16 SHARDS (0 ABORTS)</span>
+              <span className="text-purple-300 font-black text-[11px]">16 SHARDS</span>
             )}
           </div>
         </div>
 
-        {/* User Balance & Wallet Action */}
-        <div className="flex items-center space-x-3">
+        {/* User Balance & Wallet Action - Tightly bounded, never wraps or pushes offscreen */}
+        <div className="flex items-center space-x-2 sm:space-x-2.5 shrink-0">
           {/* 1-Click Session Badge */}
           {walletAddress && is1ClickTrading && activeSession && (
             <div 
               onClick={handleToggle1Click}
-              className={"hidden xl:flex items-center space-x-2 px-3 py-1.5 rounded-xl border font-mono text-xs cursor-pointer select-none transition-all " + (
+              className={"hidden lg:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border font-mono text-xs cursor-pointer select-none transition-all shrink-0 " + (
                 activeSession.isLocked 
                   ? "bg-amber-950/80 border-amber-500/50 text-amber-300"
                   : "bg-cyan-950/80 border-cyan-500/50 text-cyan-300"
@@ -1060,17 +1078,17 @@ export default function FluxGamingTerminal() {
                 <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
               )}
               <span className="font-bold">
-                {activeSession.isLocked ? "LOCKED (INACTIVITY)" : "1-CLICK ACTIVE"}
+                {activeSession.isLocked ? "LOCKED" : "1-CLICK"}
               </span>
-              <span className="text-[10px] text-slate-400 bg-black/40 px-1.5 py-0.5 rounded">
-                {activeSession.storageType === "local" ? "24H" : "WINDOW"}
+              <span className="text-[10px] text-slate-400 bg-black/40 px-1 py-0.5 rounded font-mono">
+                {activeSession.storageType === "local" ? "24H" : "TAB"}
               </span>
             </div>
           )}
 
-          {/* Environment Status Badge (Auto-locked to wallet connection state) */}
+          {/* Environment Status Badge */}
           <div 
-            className={"hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-xl border font-mono text-xs select-none " + (
+            className={"hidden xl:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border font-mono text-xs select-none shrink-0 " + (
               walletAddress
                 ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
                 : "bg-amber-950/60 border-amber-500/40 text-amber-300"
@@ -1078,30 +1096,31 @@ export default function FluxGamingTerminal() {
             title={walletAddress ? "Connected to Monad Testnet with real wallet" : "Logged out demo mode with 1,000 virtual MON"}
           >
             <span className={"w-2 h-2 rounded-full " + (walletAddress ? "bg-emerald-400 animate-ping" : "bg-amber-400 animate-pulse")} />
-            <span className="font-bold tracking-wider">
-              {walletAddress ? "LIVE TESTNET (ONCHAIN)" : "PILOT SANDBOX (1,000 MON)"}
+            <span className="font-bold tracking-wider text-[11px]">
+              {walletAddress ? "TESTNET" : "SANDBOX"}
             </span>
           </div>
 
-          <div className="hidden sm:flex items-center space-x-2 bg-[#0C0726] border border-cyan-500/40 px-4 py-2 rounded-xl font-mono">
-            <span className="text-xs text-slate-400">BALANCE:</span>
-            <span className="text-sm font-black text-cyan-300">
-              {userBalance.toFixed(5)} MON
+          {/* Balance Pill */}
+          <div className="hidden sm:flex items-center space-x-1.5 bg-[#0C0726] border border-cyan-500/40 px-2.5 sm:px-3 py-1.5 rounded-xl font-mono shrink-0">
+            <span className="text-[11px] text-slate-400 hidden md:inline">BAL:</span>
+            <span className="text-xs sm:text-sm font-black text-cyan-300 tabular-nums">
+              {userBalance.toFixed(3)} MON
             </span>
           </div>
 
           {/* Quick Guide & Terminal Features Button */}
           <button
             onClick={() => setShowGuideModal(true)}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl font-mono text-xs font-bold border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 hover:text-white transition-all shadow-[0_0_12px_rgba(168,85,247,0.2)] active:scale-95"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl font-mono text-xs font-bold border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 hover:text-white transition-all shadow-[0_0_12px_rgba(168,85,247,0.2)] active:scale-95 shrink-0"
             title="Terminal Guide & Feature Highlights"
           >
-            <HelpCircle className="w-4 h-4 text-cyan-400" />
-            <span className="hidden lg:inline">FEATURES</span>
+            <HelpCircle className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline text-xs">FEATURES</span>
           </button>
 
           {/* Wallet Connect / Account Dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => {
                 if (walletAddress) {
@@ -1110,15 +1129,15 @@ export default function FluxGamingTerminal() {
                   handleConnectWallet();
                 }
               }}
-              className={"group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-mono text-xs font-black uppercase tracking-wider text-white transition-all " + (
+              className={"group relative inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl font-mono text-xs font-black uppercase tracking-wider text-white transition-all shrink-0 " + (
                 walletAddress 
                   ? "bg-gradient-to-r from-purple-800 to-indigo-900 border border-purple-500/50 hover:border-cyan-400"
                   : "bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 neon-glow-purple active:scale-95"
               )}
             >
-              <Wallet className="w-4 h-4 text-cyan-200" />
-              <span>{walletAddress ? (walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4)) : "CONNECT WALLET"}</span>
-              {walletAddress && <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-transform" />}
+              <Wallet className="w-3.5 h-3.5 text-cyan-200 shrink-0" />
+              <span className="truncate">{walletAddress ? (walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4)) : "CONNECT"}</span>
+              {walletAddress && <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-white transition-transform shrink-0" />}
             </button>
 
             {/* Account Menu Dropdown */}
