@@ -1,20 +1,20 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "FluxState | Sub-Second Parallel Micro-Speculation on Monad",
-  description: "Ultra-high-frequency parallelized micro-prediction markets powered by Monad's 1-second finality and parallel EVM.",
+  title: "FluxState | Block-by-Block Funding Perpetuals on Monad",
+  description: "Institutional-grade perpetuals DEX with block-by-block dynamic funding and 16-shard parallel EVM architecture on Monad.",
   openGraph: {
-    title: "FluxState | Sub-Second Parallel Micro-Speculation on Monad",
-    description: "Ultra-high-frequency parallelized micro-prediction markets powered by Monad's 1-second finality.",
-    url: "https://fluxstate.monad.xyz",
+    title: "FluxState | Block-by-Block Funding Perpetuals on Monad",
+    description: "Sub-second perpetuals with continuous block-by-block funding rates powered by Monad's 1-second finality and Block-STM.",
+    url: "https://fluxstate-monad.vercel.app",
     siteName: "FluxState",
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "FluxState | Sub-Second Parallel Micro-Speculation on Monad",
-    description: "Micro-prediction markets with 1-second onchain settlements enabled exclusively by Monad's Parallel EVM.",
+    title: "FluxState | Block-by-Block Funding Perpetuals on Monad",
+    description: "Perpetuals with funding that updates every block enabled by Monad's 16-shard parallel EVM architecture.",
   },
 };
 

@@ -191,6 +191,20 @@ export default function FluxGamingTerminal() {
     };
   }, [activePosition, monPrice, isPilotMode, isSimActive, effectivePrice]);
 
+  // Dynamic 24h/Session Price Change percentage derived from tick stream
+  const dynamicPriceChange = useMemo(() => {
+    if (!priceHistory || priceHistory.length < 2) return { str: "+4.12%", isPositive: true };
+    const first = priceHistory[0];
+    const latest = isPilotMode && isSimActive ? effectivePrice : monPrice;
+    if (first <= 0) return { str: "+0.00%", isPositive: true };
+    const diffPct = ((latest - first) / first) * 100;
+    const isPositive = diffPct >= 0;
+    return {
+      str: `${isPositive ? "+" : ""}${diffPct.toFixed(2)}%`,
+      isPositive
+    };
+  }, [priceHistory, monPrice, isPilotMode, isSimActive, effectivePrice]);
+
   // Real Pyth Hermes Oracle Price Feed (MON/USD) with fallback
   useEffect(() => {
     let alive = true;
@@ -1204,8 +1218,13 @@ export default function FluxGamingTerminal() {
                       <ShieldAlert className="w-3.5 h-3.5 mr-1" /> SIMULATED SHIFT ({simPriceShift >= 0 ? "+" : ""}{simPriceShift}%)
                     </span>
                   ) : (
-                    <span className="text-emerald-400 text-sm font-mono font-bold flex items-center bg-emerald-950/50 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                      <TrendingUp className="w-3.5 h-3.5 mr-1" /> +4.12%
+                    <span className={"text-sm font-mono font-bold flex items-center px-2.5 py-0.5 rounded-full border " + (
+                      dynamicPriceChange.isPositive 
+                        ? "text-emerald-400 bg-emerald-950/50 border-emerald-500/30" 
+                        : "text-rose-400 bg-rose-950/50 border-rose-500/30"
+                    )}>
+                      {dynamicPriceChange.isPositive ? <TrendingUp className="w-3.5 h-3.5 mr-1" /> : <TrendingDown className="w-3.5 h-3.5 mr-1" />}
+                      {dynamicPriceChange.str}
                     </span>
                   )}
                 </div>
