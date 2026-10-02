@@ -1287,13 +1287,30 @@ export default function FluxGamingTerminal() {
                   </span>
                 </div>
 
-                <button
-                  onClick={handleClosePosition}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 font-mono text-xs font-black uppercase text-white shadow-lg shadow-purple-600/30 active:scale-95 transition-all flex items-center space-x-2"
-                >
-                  <XCircle className="w-4 h-4" />
-                  <span>CLOSE & SETTLE PAYOUT</span>
-                </button>
+                <div className="flex items-center space-x-2">
+                  {isPilotMode && (
+                    <button
+                      onClick={() => setIsSimActive(!isSimActive)}
+                      className={"px-3 py-2 rounded-xl font-mono text-xs font-bold border transition-all flex items-center space-x-1.5 active:scale-95 " + (
+                        isSimActive 
+                          ? "bg-amber-950/80 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.3)]" 
+                          : "bg-purple-950/60 border-purple-500/40 text-purple-300 hover:text-white hover:border-cyan-400"
+                      )}
+                      title="Simulate price crashes and test liquidation thresholds directly"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{isSimActive ? "CLOSE STRESS SIM" : "STRESS TEST MMR"}</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleClosePosition}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 font-mono text-xs font-black uppercase text-white shadow-lg shadow-purple-600/30 active:scale-95 transition-all flex items-center space-x-2"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span>CLOSE & SETTLE PAYOUT</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 text-xs font-mono">
@@ -1528,42 +1545,42 @@ export default function FluxGamingTerminal() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full font-mono text-[10px]">
+                <table className="w-full font-mono text-xs">
                   <thead>
-                    <tr className="text-slate-500 border-b border-purple-900/40 pb-1">
-                      <th className="py-1 text-left">CHAIN</th>
-                      <th className="py-1 text-center">BLOCK</th>
-                      <th className="py-1 text-center">KEEPER/DAY</th>
-                      <th className="py-1 text-center">FUNDING</th>
+                    <tr className="text-slate-400 border-b border-purple-900/40 pb-1.5 text-[11px] font-bold">
+                      <th className="py-1.5 text-left">CHAIN</th>
+                      <th className="py-1.5 text-center">BLOCK</th>
+                      <th className="py-1.5 text-center">KEEPER/DAY</th>
+                      <th className="py-1.5 text-center">FUNDING</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-purple-900/20 text-[10px]">
-                    <tr className="text-slate-400">
-                      <td className="py-1.5 font-bold">Ethereum L1</td>
-                      <td className="text-center">12s</td>
+                  <tbody className="divide-y divide-purple-900/20 text-xs">
+                    <tr className="text-slate-300">
+                      <td className="py-2 font-bold text-white">Ethereum L1</td>
+                      <td className="text-center font-medium">12s</td>
                       <td className="text-center text-rose-400 font-bold">~$14,400</td>
-                      <td className="text-center text-rose-400">8h Epoch</td>
+                      <td className="text-center text-rose-400 font-medium">8h Epoch</td>
                     </tr>
-                    <tr className="text-slate-400">
-                      <td className="py-1.5 font-bold">Arbitrum</td>
-                      <td className="text-center">250ms</td>
+                    <tr className="text-slate-300">
+                      <td className="py-2 font-bold text-white">Arbitrum</td>
+                      <td className="text-center font-medium">250ms</td>
                       <td className="text-center text-amber-400 font-bold">~$480</td>
-                      <td className="text-center text-amber-400">1h Lag</td>
+                      <td className="text-center text-amber-400 font-medium">1h Lag</td>
                     </tr>
-                    <tr className="text-emerald-300 font-bold bg-emerald-950/20">
-                      <td className="py-1.5 flex items-center gap-1 text-emerald-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    <tr className="text-emerald-300 font-bold bg-emerald-950/30">
+                      <td className="py-2 flex items-center gap-1.5 text-emerald-400 font-black">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                         Monad
                       </td>
-                      <td className="text-center">1.0s</td>
-                      <td className="text-center text-emerald-400">~$0.04</td>
-                      <td className="text-center text-emerald-400">Every Block ✓</td>
+                      <td className="text-center font-black">1.0s</td>
+                      <td className="text-center text-emerald-400 font-black">~$0.04</td>
+                      <td className="text-center text-emerald-400 font-black">Every Block ✓</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
 
-              <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-2.5 py-1.5 text-[10px] font-mono text-emerald-300 leading-relaxed">
+              <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 leading-relaxed">
                 ⚡ <strong>checkpointFundingRate()</strong> consumes ~32k gas. 86,400 daily block updates cost <strong>&lt; $0.05/day on Monad</strong>.
               </div>
             </div>
@@ -1720,34 +1737,34 @@ export default function FluxGamingTerminal() {
               </button>
 
               {showKeeperDrawer && (
-                <div className="px-4 pb-3 space-y-1.5 border-t border-purple-900/40 pt-2">
-                  <div className="text-[9px] text-slate-400 mb-1 flex justify-between items-center bg-[#070318] px-2 py-1 rounded border border-cyan-500/20">
-                    <span>Sentinel Address: 0xf163...def15</span>
+                <div className="px-4 pb-3 space-y-2 border-t border-purple-900/40 pt-2.5">
+                  <div className="text-[11px] text-slate-300 mb-1 flex justify-between items-center bg-[#070318] px-3 py-1.5 rounded-lg border border-cyan-500/20">
+                    <span className="font-medium">Sentinel Address: <strong className="text-white">0xf163...def15</strong></span>
                     <a
                       href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5"
                       target="_blank"
                       rel="noreferrer"
-                      className="text-cyan-300 hover:underline flex items-center gap-0.5"
+                      className="text-cyan-300 hover:text-white flex items-center gap-1 font-bold"
                     >
                       <span>Contract Logs</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
+                      <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                   {keeperTxFeed.map((tx, idx) => (
-                    <div key={idx} className="flex items-center justify-between bg-[#08021C] rounded-lg px-2.5 py-1.5 border border-purple-900/30 text-[10px]">
+                    <div key={idx} className="flex items-center justify-between bg-[#08021C] rounded-xl px-3 py-2 border border-purple-900/30 text-xs">
                       <div>
-                        <div className="font-bold text-cyan-300">{tx.method}</div>
-                        <div className="text-slate-500 text-[9px]">Block #{tx.blockNumber} • {tx.age}</div>
+                        <div className="font-bold text-cyan-300 text-xs">{tx.method}</div>
+                        <div className="text-slate-400 text-[11px] mt-0.5">Block #{tx.blockNumber} • {tx.age}</div>
                       </div>
                       <a
                         href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5"
                         target="_blank"
                         rel="noreferrer"
                         title="View verified checkpoint transactions on MonadScan"
-                        className="flex items-center space-x-1 text-purple-300 hover:text-cyan-300 transition-colors font-mono"
+                        className="flex items-center space-x-1 text-purple-300 hover:text-cyan-300 transition-colors font-mono font-bold text-xs"
                       >
                         <span>{tx.hash}</span>
-                        <ExternalLink className="w-3 h-3" />
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </div>
                   ))}
@@ -2137,50 +2154,117 @@ export default function FluxGamingTerminal() {
               </button>
             </div>
 
-            {/* Feature Cards Grid */}
+            {/* Mode Switch Tabs inside Guide */}
+            <div className="flex bg-[#070318] p-1 rounded-xl border border-purple-900/40 font-mono text-xs">
+              <button
+                type="button"
+                onClick={() => setIsPilotMode(true)}
+                className={"flex-1 py-2 rounded-lg font-bold transition-all flex items-center justify-center space-x-1.5 " + (
+                  isPilotMode 
+                    ? "bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-[0_0_10px_rgba(251,191,36,0.2)]" 
+                    : "text-slate-400 hover:text-white"
+                )}
+              >
+                <span>🧪 PILOT SANDBOX FEATURES</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPilotMode(false)}
+                className={"flex-1 py-2 rounded-lg font-bold transition-all flex items-center justify-center space-x-1.5 " + (
+                  !isPilotMode 
+                    ? "bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.2)]" 
+                    : "text-slate-400 hover:text-white"
+                )}
+              >
+                <span>⚡ LIVE TESTNET FEATURES</span>
+              </button>
+            </div>
+
+            {/* Feature Cards Grid (Mode-Sensitive) */}
             <div className="space-y-4 font-mono text-xs">
-              
-              {/* Feature 1: 1-Click Session Keys */}
-              <div className="bg-[#070318] p-4 rounded-2xl border border-cyan-500/30 space-y-2">
-                <div className="flex items-center space-x-2 text-cyan-300 font-bold text-sm">
-                  <Zap className="w-4 h-4 text-cyan-400" />
-                  <span>1-CLICK TRADING (0 POPUPS)</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  Tired of confirming every market order in MetaMask? Click <strong className="text-cyan-300">ENABLE 1-CLICK</strong> in the Perp Cockpit. Sign once with your wallet to grant an ephemeral in-memory session key. Execute trades in sub-50ms with zero popups!
-                </p>
-                <div className="text-[11px] text-emerald-400/90 bg-emerald-950/40 px-2.5 py-1 rounded border border-emerald-500/20">
-                  ✓ Non-Custodial: Session keys cannot transfer or withdraw funds.
-                </div>
-              </div>
+              {isPilotMode ? (
+                <>
+                  {/* Sandbox Feature 1: Volatility & Liquidation Stress Tester */}
+                  <div className="bg-[#070318] p-4 rounded-2xl border border-amber-500/30 space-y-2">
+                    <div className="flex items-center space-x-2 text-amber-300 font-bold text-sm">
+                      <Sliders className="w-4 h-4 text-amber-400" />
+                      <span>VOLATILITY & LIQUIDATION STRESS TESTER</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      Judge-exclusive simulation toolkit: Open any position and click <strong className="text-amber-300">STRESS TEST MMR</strong> in the Active Position HUD or Cockpit. Shift oracle prices by ±40% in real-time, observe the dynamic Margin Health Bar turn green $\to$ red, and trigger instant simulated keeper liquidations.
+                    </p>
+                    <div className="text-[11px] text-amber-400/90 bg-amber-950/40 px-2.5 py-1 rounded border border-amber-500/20">
+                      ✓ Instant Sandbox Demo: Zero real MON at risk; test liquidation edge-cases on demand.
+                    </div>
+                  </div>
 
-              {/* Feature 2: 24-Hour Quick-PIN Protection */}
-              <div className="bg-[#070318] p-4 rounded-2xl border border-purple-500/30 space-y-2">
-                <div className="flex items-center space-x-2 text-purple-300 font-bold text-sm">
-                  <Lock className="w-4 h-4 text-purple-400" />
-                  <span>24-HOUR QUICK-PIN PERSISTENCE</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  Choose <strong className="text-purple-300">Remember for 24 Hours</strong> and set a 4-digit PIN. Your session survives browser reloads. If you walk away for 15 minutes, the terminal auto-locks to protect your funds until you re-enter your PIN.
-                </p>
-              </div>
+                  {/* Sandbox Feature 2: 1,000 MON Pilot Wallet */}
+                  <div className="bg-[#070318] p-4 rounded-2xl border border-purple-500/30 space-y-2">
+                    <div className="flex items-center space-x-2 text-purple-300 font-bold text-sm">
+                      <Wallet className="w-4 h-4 text-purple-400" />
+                      <span>1,000 MON ZERO-FRICTION TRIAL BALANCE</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      No MetaMask or testnet faucet needed. Enjoy instant trading with 1,000 virtual MON margin, persistent browser localStorage accounting, and full isolated margin leverage up to 50x.
+                    </p>
+                  </div>
 
-              {/* Feature 3: Block-By-Block Continuous Funding */}
-              <div className="bg-[#070318] p-4 rounded-2xl border border-emerald-500/30 space-y-2">
-                <div className="flex items-center space-x-2 text-emerald-300 font-bold text-sm">
-                  <Percent className="w-4 h-4 text-emerald-400" />
-                  <span>1-SECOND BLOCK-BY-BLOCK FUNDING</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  Unlike traditional DEXes that calculate funding every 8 hours, FluxState calculates and accrues funding on every single 1-second Monad block directly onchain based on real-time net long/short skew.
-                </p>
-              </div>
+                  {/* Sandbox Feature 3: EVM Feasibility Matrix */}
+                  <div className="bg-[#070318] p-4 rounded-2xl border border-cyan-500/30 space-y-2">
+                    <div className="flex items-center space-x-2 text-cyan-300 font-bold text-sm">
+                      <Gauge className="w-4 h-4 text-cyan-400" />
+                      <span>EVM ARCHITECTURAL COMPARISON MATRIX</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      View live cost and latency metrics comparing Ethereum L1 ($14,400/day keeper costs), Arbitrum ($480/day), and Monad (&lt;$0.05/day for 86,400 daily block checkpoints).
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Testnet Feature 1: 1-Click Session Keys */}
+                  <div className="bg-[#070318] p-4 rounded-2xl border border-cyan-500/30 space-y-2">
+                    <div className="flex items-center space-x-2 text-cyan-300 font-bold text-sm">
+                      <Zap className="w-4 h-4 text-cyan-400" />
+                      <span>1-CLICK TRADING (0 POPUPS • EIP-712)</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      Tired of confirming every market order in MetaMask? Click <strong className="text-cyan-300">ENABLE 1-CLICK</strong> in the Perp Cockpit. Sign once with your wallet to grant an ephemeral in-memory session key. Execute trades in sub-50ms with zero popups!
+                    </p>
+                    <div className="text-[11px] text-emerald-400/90 bg-emerald-950/40 px-2.5 py-1 rounded border border-emerald-500/20">
+                      ✓ Non-Custodial: Session keys cannot transfer or withdraw funds.
+                    </div>
+                  </div>
 
-              {/* Feature 4: 16-Shard Parallel EVM */}
+                  {/* Testnet Feature 2: 24-Hour Quick-PIN Protection */}
+                  <div className="bg-[#070318] p-4 rounded-2xl border border-purple-500/30 space-y-2">
+                    <div className="flex items-center space-x-2 text-purple-300 font-bold text-sm">
+                      <Lock className="w-4 h-4 text-purple-400" />
+                      <span>24-HOUR QUICK-PIN PERSISTENCE & AUTO-LOCK</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      Choose <strong className="text-purple-300">Remember for 24 Hours</strong> and set a 4-digit PIN. Your session survives browser reloads. If you walk away for 15 minutes, the terminal auto-locks to protect your funds until you re-enter your PIN.
+                    </p>
+                  </div>
+
+                  {/* Testnet Feature 3: Onchain Position Recovery */}
+                  <div className="bg-[#070318] p-4 rounded-2xl border border-emerald-500/30 space-y-2">
+                    <div className="flex items-center space-x-2 text-emerald-300 font-bold text-sm">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>ONCHAIN CONTRACT POSITION HYDRATION</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      All live trades are written to Monad Testnet contracts (`FluxMarket.sol`). On browser reload, your active position is automatically recovered directly from contract storage.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Shared Foundation Feature: 16-Shard Parallel EVM */}
               <div className="bg-[#070318] p-4 rounded-2xl border border-indigo-500/30 space-y-2">
                 <div className="flex items-center space-x-2 text-indigo-300 font-bold text-sm">
                   <Cpu className="w-4 h-4 text-indigo-400" />
-                  <span>16-SHARD PARALLEL STORAGE</span>
+                  <span>16-SHARD PARALLEL BLOCK-STM STORAGE</span>
                 </div>
                 <p className="text-slate-300 leading-relaxed">
                   FluxState splits open interest and balances across 16 independent storage shards, maximizing Monad's Block-STM parallel execution engine and eliminating slot lockup aborts.

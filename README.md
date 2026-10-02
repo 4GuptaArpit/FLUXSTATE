@@ -103,25 +103,26 @@ graph TD
 
 Instead of rebalancing synchronously on every trade (which causes storage collisions), FluxState uses a continuous cumulative index updated by autonomous keepers:
 
-$$
+```math
 \text{Skew} = \frac{\text{Total Long OI} - \text{Total Short OI}}{\max(\text{Total OI}, \$50,000)}
-$$
+```
 
-$$
-\text{Rate per Block} = \operatorname{clamp}\left(\frac{\text{Skew} \times \text{BaseRate}}{10^{18}},\ -0.00005,\ +0.00005\right)
-$$
+```math
+\text{Rate per Block} = \min\left(0.005\%, \max\left(-0.005\%, \frac{\text{Skew} \times \text{BaseRate}}{10^{18}}\right)\right)
+```
 
-$$
+```math
 \text{CumulativeIndex}_{t} = \text{CumulativeIndex}_{t-1} + (\text{Rate per Block} \times \Delta\text{Blocks})
-$$
+```
 
 ### Trader Funding Due on Settlement:
-$$
-\text{FundingDue} = \begin{cases}
-+ \dfrac{\text{Size} \times (\text{CurrentIndex} - \text{EntryIndex})}{10^{18}} & \text{(Long)} \\[8pt]
-- \dfrac{\text{Size} \times (\text{CurrentIndex} - \text{EntryIndex})}{10^{18}} & \text{(Short)}
-\end{cases}
-$$
+```math
+\text{FundingDue}_{\text{Long}} = +\frac{\text{Size} \times (\text{CurrentIndex} - \text{EntryIndex})}{10^{18}}
+```
+
+```math
+\text{FundingDue}_{\text{Short}} = -\frac{\text{Size} \times (\text{CurrentIndex} - \text{EntryIndex})}{10^{18}}
+```
 
 Funding is deducted or credited directly to trader payout in `FluxMarket.closePosition()`.
 
