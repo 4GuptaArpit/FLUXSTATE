@@ -11,7 +11,7 @@
 **Monad Metropolis Global Hackathon — Track 01: Onchain Finance & Trading**  
 *Challenge: "Perpetuals with funding that updates every block"*
 
-[🚀 Live Trading Terminal](https://fluxstate-monad.vercel.app) • [📖 Contract Audit](https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5) • [⚡ 500-Order Parallel Benchmark](#-parallel-block-stm-benchmark)
+[🚀 Live Trading Terminal](https://fluxstate.vercel.app) • [📖 Contract Audit](https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5) • [⚡ 500-Order Parallel Benchmark](#-parallel-block-stm-benchmark)
 
 </div>
 

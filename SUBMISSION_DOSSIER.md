@@ -11,7 +11,7 @@ This document contains everything you need to submit FluxState to the **Monad Me
 - **Tagline:** Sub-Second Micro-Perpetuals with Block-by-Block Dynamic Funding on Monad
 - **Target Track:** Track 01 — Onchain Finance & Trading
 - **Challenge Addressed:** *"Perpetuals with funding that updates every block."*
-- **Live Demo URL:** `https://fluxstate-monad.vercel.app` (or your deployed Vercel link)
+- **Live Demo URL:** `https://fluxstate.vercel.app`
 - **GitHub Repository:** `https://github.com/4GuptaArpit/FLUXSTATE`
 - **Network / Chain ID:** Monad Testnet (Chain ID: 10143)
 
