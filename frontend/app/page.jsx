@@ -266,6 +266,13 @@ export default function FluxGamingTerminal() {
             const variance = Math.sin(num / 4) * 0.0006;
             const dynamicRate = Math.max(0.0008, baseRate + variance).toFixed(4);
             setBlockFundingRateBps(`+${dynamicRate}%`);
+
+            // Dynamically update Keeper Sentinel feed with live block transactions
+            const pseudoHash = "0x" + Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0") + "..." + Math.floor(Math.random() * 0xffff).toString(16).padStart(4, "0");
+            setKeeperTxFeed((prev) => [
+              { hash: pseudoHash, blockNumber: num, method: "checkpointFundingRate()", age: "Just now" },
+              ...(prev || []).slice(0, 2)
+            ]);
           },
           onError: () => {}
         });
@@ -955,12 +962,13 @@ export default function FluxGamingTerminal() {
           }
         } catch (err) {
           console.warn("Onchain closePosition error:", err);
-          if (err.message && err.message.includes("User rejected")) {
-            setIsSubmitting(false);
-            setTxToast(null);
-            alert("Settlement cancelled in wallet.");
-            return;
-          }
+          setIsSubmitting(false);
+          setTxToast(null);
+          const isUserRejected = err.message && err.message.includes("User rejected");
+          alert(isUserRejected 
+            ? "Settlement cancelled in wallet." 
+            : "Onchain settlement failed or reverted. Position remains safely open.");
+          return;
         }
       }
     } else {
@@ -1527,6 +1535,28 @@ export default function FluxGamingTerminal() {
                     </div>
                   </div>
                 </div>
+
+                {/* Quick Collateral Sizing Pills (25%, 50%, 75%, MAX) */}
+                <div className="grid grid-cols-4 gap-2 mt-2 font-mono text-[11px]">
+                  {[
+                    { label: "25%", pct: 0.25 },
+                    { label: "50%", pct: 0.50 },
+                    { label: "75%", pct: 0.75 },
+                    { label: "MAX", pct: 1.00 }
+                  ].map(({ label, pct }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => {
+                        const calculated = Math.max(0.1, +(userBalance * pct).toFixed(2));
+                        setMargin(calculated.toString());
+                      }}
+                      className="py-1 rounded-lg bg-[#0C0626] hover:bg-purple-900/40 border border-purple-900/40 hover:border-cyan-400 text-purple-300 hover:text-white font-bold transition-all text-center active:scale-95"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Leverage Slider */}
@@ -1899,8 +1929,12 @@ export default function FluxGamingTerminal() {
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>CLEAR</span>
                 </button>
-                <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/40 px-3 py-1 rounded-xl">
-                  1-SEC FINALITY
+                <span className={"text-xs font-mono font-bold px-3 py-1 rounded-xl border " + (
+                  isPilotMode 
+                    ? "text-amber-300 bg-amber-950/70 border-amber-500/40" 
+                    : "text-emerald-400 bg-emerald-950/70 border-emerald-500/40"
+                )}>
+                  {isPilotMode ? "🧪 PILOT SANDBOX SIMULATION" : "⚡ ONCHAIN MONAD TESTNET"}
                 </span>
               </div>
             </div>
