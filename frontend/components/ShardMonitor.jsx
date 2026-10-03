@@ -127,8 +127,8 @@ export const ShardMonitor = ({ activeShardId = null, isPilotMode = true }) => {
               )}
             >
               {isUserShard && (
-                <div className="absolute -top-1.5 -right-1 text-[8px] bg-cyan-400 text-black px-1 rounded font-black font-mono uppercase pointer-events-none">
-                  YOU
+                <div className="absolute -top-2 -right-1.5 text-[8px] bg-cyan-400 text-black px-1.5 py-0.2 rounded-full font-black font-mono tracking-tight uppercase pointer-events-none shadow-[0_0_8px_rgba(6,182,212,0.8)] border border-cyan-200">
+                  CURRENT
                 </div>
               )}
               <div className={"text-[10px] font-mono mb-0.5 font-bold pointer-events-none " + (isUserShard ? "text-cyan-300" : "text-purple-300/80")}>

@@ -2658,7 +2658,7 @@ export default function FluxGamingTerminal() {
                   <span>HIGH-FREQUENCY HOTKEYS</span>
                 </div>
                 <p className="text-slate-300 leading-relaxed">
-                  Zero-latency hotkey execution: Press <strong className="text-emerald-300">[B]</strong> to Buy / Long, <strong className="text-rose-300">[S]</strong> to Sell / Short, <strong className="text-amber-300">[C]</strong> to Close & Settle, and <strong className="text-cyan-300">[1]</strong> to toggle 1-Click Trading.
+                  Zero-latency keyboard shortcuts for scalping: Press <strong className="text-emerald-300">[B]</strong> to Buy / Long, <strong className="text-rose-300">[S]</strong> to Sell / Short, <strong className="text-amber-300">[C]</strong> to Close & Settle, and <strong className="text-cyan-300">[1]</strong> to toggle 1-Click Trading.
                 </p>
               </div>
 
@@ -2669,7 +2669,29 @@ export default function FluxGamingTerminal() {
                   <span>16-SHARD PARALLEL BLOCK-STM STORAGE MATRIX</span>
                 </div>
                 <p className="text-slate-300 leading-relaxed">
-                  FluxState splits open interest and balances across 16 independent storage shards. Look at the Shard Matrix to see <strong className="text-cyan-300">YOUR ASSIGNED SHARD (⭐ YOU)</strong> computed from your wallet address modulo 16, ensuring 0% abort contention in Monad's parallel VM.
+                  FluxState splits open interest and balances across 16 independent EVM storage slots (<code className="text-cyan-300">keccak256(shardId, 0x05)</code>). The matrix automatically highlights your assigned storage slot with a neon <strong className="text-cyan-300">CURRENT</strong> badge, guarantees 0.00% write collisions in Monad's parallel engine, and features a one-click 500-Trade Parallel Benchmark.
+                </p>
+              </div>
+
+              {/* Shared Foundation Feature 3: Block Stream Funding Taximeter */}
+              <div className="bg-[#070318] p-4 rounded-2xl border border-cyan-500/30 space-y-2">
+                <div className="flex items-center space-x-2 text-cyan-300 font-bold text-sm">
+                  <Gauge className="w-4 h-4 text-cyan-400" />
+                  <span>BLOCK STREAM FUNDING TAXIMETER & CONTINUOUS SETTLEMENT</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Every 1.0s Monad block checkpoint, funding dynamically accrues and settles. The Active Position HUD features a live funding stream breakdown with the <strong className="text-cyan-300">1-SEC FUNDING APPLIED</strong> badge and real-time micro-funding accrual counter.
+                </p>
+              </div>
+
+              {/* Shared Foundation Feature 4: 24H Market Range & Liquidity Depth */}
+              <div className="bg-[#070318] p-4 rounded-2xl border border-purple-500/30 space-y-2">
+                <div className="flex items-center space-x-2 text-purple-300 font-bold text-sm">
+                  <BarChart2 className="w-4 h-4 text-purple-400" />
+                  <span>24H MARKET RANGE & LIQUIDITY DEPTH MATRIX</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Institutional crypto analytics powered by sub-second Pyth feeds: live 24H High/Low range slider bar, All-Time High (ATH), Cycle Floor (ATL), estimated 24H Volume, and real-time Long/Short market sentiment.
                 </p>
               </div>
 

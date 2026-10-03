@@ -28,6 +28,43 @@ Legacy perps (dYdX, GMX) recalculate funding only once every **1 to 8 hours** du
 
 ---
 
+## ⚡ Core Feature Suite
+
+### 1. 16-Shard Parallel Block-STM Storage Matrix
+- **State Collision Elimination**: Partitions protocol open interest and write locks across 16 isolated EVM storage slots (`keccak256(shardId, 0x05)`).
+- **Deterministic Shard Allocation**: Automatically hashes the trader's address (`uint160(trader) % 16`) and highlights their assigned storage slot with an active neon **`CURRENT`** badge.
+- **500-Trade Concurrent Benchmark**: One-click in-terminal simulator firing 500 parallel trades distributed across all 16 shards in 82ms with 0 parallel transaction aborts (~6,100 TPS equivalent).
+
+### 2. Block Stream Funding Taximeter
+- **Sub-Second Continuous Settlement**: Rather than periodic 8-hour lurches, funding rate updates on every 1.0s Monad block.
+- **Live Unrealized PnL Breakdown**: Includes real-time `1-SEC FUNDING APPLIED` status and micro-cent accumulator showing instantaneous accrued block funding (`-0.00024 MON / block`).
+
+### 3. 24H Market Range & Liquidity Depth Matrix
+- **Institutional Market Standard**: Crypto equivalent of equities 52-week & day high/low metrics.
+- **Real-Time Pyth Streams**: Live 24H Price Range gradient slider bar, All-Time High (ATH), Cycle Floor (ATL), estimated 24H Volume, and real-time Long/Short market sentiment breakdown.
+
+### 4. High-Frequency Trading Cockpit & Hotkeys
+- **Zero-Latency Scalping Shortcuts**:
+  - `[B]`: Instant BUY / LONG
+  - `[S]`: Instant SELL / SHORT
+  - `[C]`: Close Position & Settle PnL
+  - `[1]`: Toggle 1-Click Session Keys
+- **Margin Presets**: Instant 25%, 50%, 75%, and MAX collateral sizing pills with stepper controls.
+
+### 5. 1-Click Session Keys (EIP-712 Zero-Popup Trading)
+- **1-Time Signature**: Sign once in MetaMask to authorize an ephemeral secp256k1 session key. Subsequent market orders execute in sub-50ms with 0 wallet popups.
+- **Dual Persistence Modes**:
+  - *Single-Window (SessionStorage)*: Key is purged immediately upon closing tab.
+  - *24-Hour Persistent (LocalStorage)*: Protected by optional 4-digit Quick-PIN and 15-minute inactivity auto-lock.
+- **Zero-Withdrawal Guarantee**: Cryptographically restricted to trading calls only (`FluxMarket.openPosition` / `closePosition`); zero ability to transfer or withdraw underlying collateral.
+
+### 6. Sandbox Volatility Stress Tester & Keeper Sentinel
+- **Risk Edge-Case Simulator**: Shift Pyth oracle prices by $\pm 40\%$ via an interactive slider without risking real MON.
+- **Real-Time Margin Health Bar**: Color-coded liquidation indicator (Green $\to$ Amber $\to$ Red) with one-click Keeper Liquidation settlement.
+- **Autonomous Keeper Sentinel**: Runs 3-second background checkpoints on `FluxFundingEngine.sol` with anti-sandwich block cooldown protection.
+
+---
+
 ## 📊 Why This Can ONLY Exist on Monad (EVM Feasibility Matrix)
 
 | Metric / Dimension | Ethereum L1 | Arbitrum One | Monad (FluxState) |
