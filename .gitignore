@@ -35,6 +35,7 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
 # Internal documentation & submission drafts
 PROJECT_LOG.md
 SUBMISSION_DOSSIER.md
@@ -43,3 +44,4 @@ SUBMISSION_DOSSIER.md
 *.bak
 *.tmp
 frontend/test_web3_logic.mjs
+contracts/test/*

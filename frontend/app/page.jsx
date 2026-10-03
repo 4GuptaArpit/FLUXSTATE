@@ -63,6 +63,7 @@ export default function FluxGamingTerminal() {
   const [activeSession, setActiveSession] = useState(null);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [showSessionExpiredModal, setShowSessionExpiredModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
@@ -544,11 +545,21 @@ export default function FluxGamingTerminal() {
     let timeoutId;
     const resetTimer = () => {
       clearTimeout(timeoutId);
-      // 15 minutes of inactivity triggers lock (900,000 ms)
+      // 15 minutes of inactivity triggers lock or auto-expiration (900,000 ms)
       timeoutId = setTimeout(() => {
-        lockActiveSession();
-        setActiveSession((prev) => prev ? { ...prev, isLocked: true } : null);
-        setShowUnlockModal(true);
+        if (activeSession.pinHash) {
+          // 24H Persistent Mode with PIN: Lock terminal behind 4-digit Quick-PIN
+          lockActiveSession();
+          setActiveSession((prev) => prev ? { ...prev, isLocked: true } : null);
+          setShowUnlockModal(true);
+        } else {
+          // Option A: Single-Window mode auto-expires and completely wipes credentials!
+          revokeSession();
+          setActiveSession(null);
+          setIs1ClickTrading(false);
+          setShowUnlockModal(false);
+          setShowSessionExpiredModal(true);
+        }
       }, 15 * 60 * 1000);
     };
 
@@ -668,6 +679,7 @@ export default function FluxGamingTerminal() {
     revokeSession();
     setActiveSession(null);
     setIs1ClickTrading(false);
+    setShowSessionExpiredModal(false);
     setWalletAddress(null);
     setShowAccountDropdown(false);
     setIsPilotMode(true);
@@ -698,6 +710,7 @@ export default function FluxGamingTerminal() {
     setIs1ClickTrading(false);
     setShowSessionModal(false);
     setShowUnlockModal(false);
+    setShowSessionExpiredModal(false);
     setTxToast({
       title: "SESSION KEY REVOKED",
       amount: "1-Click Disabled",
@@ -1978,15 +1991,20 @@ export default function FluxGamingTerminal() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      lockActiveSession();
-                      setActiveSession((prev) => prev ? { ...prev, isLocked: true } : null);
-                      setShowSessionModal(false);
-                      setShowUnlockModal(true);
+                      if (activeSession.pinHash) {
+                        lockActiveSession();
+                        setActiveSession((prev) => prev ? { ...prev, isLocked: true } : null);
+                        setShowSessionModal(false);
+                        setShowUnlockModal(true);
+                      } else {
+                        // Single-window mode has no PIN: locking immediately wipes session
+                        handleRevokeSession();
+                      }
                     }}
                     className="flex-1 py-3 rounded-xl bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/40 text-amber-300 font-mono text-xs font-bold transition-all flex items-center justify-center space-x-2"
                   >
                     <Lock className="w-4 h-4" />
-                    <span>LOCK NOW</span>
+                    <span>{activeSession.pinHash ? "LOCK NOW" : "LOCK & CLEAR"}</span>
                   </button>
 
                   <button
@@ -2127,15 +2145,21 @@ export default function FluxGamingTerminal() {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => {
-                  setActiveSession((prev) => prev ? { ...prev, isLocked: false } : null);
-                  setShowUnlockModal(false);
-                }}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 font-mono font-bold text-xs uppercase text-white shadow-lg shadow-cyan-600/30 transition-all active:scale-95"
-              >
-                CLICK TO RESUME SESSION
-              </button>
+              <div className="space-y-3">
+                <p className="text-xs font-mono text-slate-400">
+                  Single-window sessions cannot be resumed without wallet re-authorization.
+                </p>
+                <button
+                  onClick={() => {
+                    handleRevokeSession();
+                    setShowSessionModal(true);
+                  }}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 font-mono font-bold text-xs uppercase text-white shadow-lg shadow-cyan-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>RE-AUTHORIZE WITH WALLET</span>
+                </button>
+              </div>
             )}
 
             <div className="pt-2 border-t border-purple-900/30">
@@ -2144,6 +2168,55 @@ export default function FluxGamingTerminal() {
                 className="text-xs font-mono text-rose-400 hover:text-rose-300 underline"
               >
                 Revoke Session & Disconnect 1-Click
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session Expired (Inactivity Auto-Wipe) Modal for Single-Window Mode */}
+      {showSessionExpiredModal && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 z-[10001]">
+          <div className="bg-[#0C0626] border border-rose-500/40 rounded-3xl p-8 max-w-md w-full shadow-[0_0_60px_rgba(244,63,94,0.25)] space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-rose-950/80 border border-rose-400/60 flex items-center justify-center mx-auto shadow-lg shadow-rose-600/30">
+              <ShieldAlert className="w-8 h-8 text-rose-400 animate-pulse" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-mono font-black text-xl text-white">SESSION EXPIRED</h3>
+              <p className="text-xs font-mono text-rose-400">Auto-wiped due to 15 minutes of inactivity</p>
+            </div>
+
+            <div className="bg-[#070318] p-4 rounded-2xl border border-purple-900/40 text-xs font-mono text-slate-300 leading-relaxed text-left space-y-2">
+              <div className="flex items-center space-x-2 text-rose-300 font-bold">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Zero-Trust Security Triggered</span>
+              </div>
+              <p>
+                Your single-window trading credentials were automatically wiped from memory to prevent unauthorized orders while unattended.
+              </p>
+              <p className="text-slate-400 text-[11px]">
+                No one at this machine can execute trades. To resume popup-free trading, re-authorize with your connected wallet.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setShowSessionExpiredModal(false);
+                  setShowSessionModal(true);
+                }}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 font-mono font-bold text-xs uppercase text-white shadow-lg shadow-cyan-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
+              >
+                <Zap className="w-4 h-4" />
+                <span>RE-ENABLE 1-CLICK TRADING</span>
+              </button>
+
+              <button
+                onClick={() => setShowSessionExpiredModal(false)}
+                className="w-full py-2.5 rounded-xl bg-[#08021C] hover:bg-purple-950/50 border border-purple-500/30 text-purple-300 font-mono text-xs transition-all"
+              >
+                CONTINUE WITH MANUAL CONFIRMATIONS
               </button>
             </div>
           </div>
