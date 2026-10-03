@@ -169,12 +169,15 @@ export async function unlockActiveSession(inputPin) {
   try {
     const session = JSON.parse(rawSession);
 
-    // If PIN protected, verify PIN
-    if (session.pinHash) {
-      const hashed = await hashPin(inputPin);
-      if (hashed !== session.pinHash) {
-        return false;
-      }
+    // Sessions without a PIN cannot be unlocked via this function (must re-auth with wallet)
+    if (!session.pinHash) {
+      return false;
+    }
+
+    // Verify PIN against stored hash
+    const hashed = await hashPin(inputPin);
+    if (hashed !== session.pinHash) {
+      return false;
     }
 
     session.isLocked = false;

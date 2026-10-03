@@ -199,4 +199,4 @@ npm start
 - **Project Name**: FluxState
 - **Network**: Monad Testnet (Chain ID: 10143)
 - **Repository**: [https://github.com/4GuptaArpit/FLUXSTATE](https://github.com/4GuptaArpit/FLUXSTATE)
-- **Live Terminal**: [https://fluxstate-monad.vercel.app](https://fluxstate-monad.vercel.app)
+- **Live Terminal**: [https://fluxstate.vercel.app/](https://fluxstate.vercel.app/)

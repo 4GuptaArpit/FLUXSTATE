@@ -44,4 +44,3 @@ SUBMISSION_DOSSIER.md
 *.bak
 *.tmp
 frontend/test_web3_logic.mjs
-contracts/test/*

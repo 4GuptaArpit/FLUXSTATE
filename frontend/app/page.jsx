@@ -71,6 +71,8 @@ export default function FluxGamingTerminal() {
   const [sessionPinInput, setSessionPinInput] = useState("");
   const [unlockPinInput, setUnlockPinInput] = useState("");
   const [unlockError, setUnlockError] = useState("");
+  const [unlockAttempts, setUnlockAttempts] = useState(0);
+  const [unlockLockedUntil, setUnlockLockedUntil] = useState(null);
   const [activePosition, setActivePosition] = useState(null);
   const [sandboxHistory, setSandboxHistory] = useState([]);
   const [testnetHistory, setTestnetHistory] = useState([]);
@@ -463,6 +465,11 @@ export default function FluxGamingTerminal() {
           revokeSession();
           setActiveSession(null);
           setIs1ClickTrading(false);
+          setShowUnlockModal(false);
+          setShowSessionExpiredModal(false);
+          setShowSessionModal(false);
+          setUnlockAttempts(0);
+          setUnlockLockedUntil(null);
         }
       };
 
@@ -488,10 +495,18 @@ export default function FluxGamingTerminal() {
     if (walletAddress) {
       const existing = loadActiveSession(walletAddress);
       if (existing) {
-        setActiveSession(existing);
-        setIs1ClickTrading(true);
-        if (existing.isLocked) {
-          setShowUnlockModal(true);
+        if (existing.storageType === "session" && existing.isLocked) {
+          // Locked single-window sessions have no PIN: auto-expire cleanly on reload
+          revokeSession();
+          setActiveSession(null);
+          setIs1ClickTrading(false);
+          setShowSessionExpiredModal(true);
+        } else {
+          setActiveSession(existing);
+          setIs1ClickTrading(true);
+          if (existing.isLocked) {
+            setShowUnlockModal(true);
+          }
         }
       } else {
         setActiveSession(null);
@@ -547,18 +562,18 @@ export default function FluxGamingTerminal() {
       clearTimeout(timeoutId);
       // 15 minutes of inactivity triggers lock or auto-expiration (900,000 ms)
       timeoutId = setTimeout(() => {
-        if (activeSession.pinHash) {
-          // 24H Persistent Mode with PIN: Lock terminal behind 4-digit Quick-PIN
-          lockActiveSession();
-          setActiveSession((prev) => prev ? { ...prev, isLocked: true } : null);
-          setShowUnlockModal(true);
-        } else {
+        if (activeSession.storageType === "session") {
           // Option A: Single-Window mode auto-expires and completely wipes credentials!
           revokeSession();
           setActiveSession(null);
           setIs1ClickTrading(false);
           setShowUnlockModal(false);
           setShowSessionExpiredModal(true);
+        } else {
+          // 24H Persistent Mode: Lock terminal (requires Quick-PIN or wallet re-auth)
+          lockActiveSession();
+          setActiveSession((prev) => prev ? { ...prev, isLocked: true } : null);
+          setShowUnlockModal(true);
         }
       }, 15 * 60 * 1000);
     };
@@ -679,7 +694,11 @@ export default function FluxGamingTerminal() {
     revokeSession();
     setActiveSession(null);
     setIs1ClickTrading(false);
+    setShowUnlockModal(false);
     setShowSessionExpiredModal(false);
+    setShowSessionModal(false);
+    setUnlockAttempts(0);
+    setUnlockLockedUntil(null);
     setWalletAddress(null);
     setShowAccountDropdown(false);
     setIsPilotMode(true);
@@ -711,6 +730,10 @@ export default function FluxGamingTerminal() {
     setShowSessionModal(false);
     setShowUnlockModal(false);
     setShowSessionExpiredModal(false);
+    setUnlockAttempts(0);
+    setUnlockLockedUntil(null);
+    setUnlockError("");
+    setUnlockPinInput("");
     setTxToast({
       title: "SESSION KEY REVOKED",
       amount: "1-Click Disabled",
@@ -721,16 +744,39 @@ export default function FluxGamingTerminal() {
     setTimeout(() => setTxToast(null), 3500);
   };
 
-  // Unlock locked session
+  // Unlock locked session with rate limiting & brute-force lockout
   const handleUnlockSession = async () => {
+    // Check if temporarily locked out
+    if (unlockLockedUntil && Date.now() < unlockLockedUntil) {
+      const waitSec = Math.ceil((unlockLockedUntil - Date.now()) / 1000);
+      setUnlockError(`Too many failed attempts. Terminal locked for ${waitSec}s.`);
+      return;
+    }
+
     setUnlockError("");
     const success = await unlockActiveSession(unlockPinInput);
     if (success) {
       setActiveSession((prev) => prev ? { ...prev, isLocked: false } : null);
       setShowUnlockModal(false);
       setUnlockPinInput("");
+      setUnlockAttempts(0);
+      setUnlockLockedUntil(null);
     } else {
-      setUnlockError("Incorrect Quick-PIN. Please try again or Revoke Session.");
+      const newAttempts = unlockAttempts + 1;
+      setUnlockAttempts(newAttempts);
+
+      if (newAttempts >= 5) {
+        // Auto-revoke session after 5 failed attempts
+        handleRevokeSession();
+        alert("Maximum PIN attempts exceeded (5/5). Session key revoked for your security.");
+      } else if (newAttempts >= 3) {
+        // 60-second cooldown after 3 attempts
+        const lockDuration = 60 * 1000;
+        setUnlockLockedUntil(Date.now() + lockDuration);
+        setUnlockError(`Incorrect PIN. 3 failed attempts: locked for 60 seconds (${5 - newAttempts} attempts left).`);
+      } else {
+        setUnlockError(`Incorrect Quick-PIN. ${5 - newAttempts} attempt(s) remaining.`);
+      }
     }
   };
 
@@ -2128,18 +2174,20 @@ export default function FluxGamingTerminal() {
                   type="password"
                   maxLength={6}
                   value={unlockPinInput}
+                  disabled={Boolean(unlockLockedUntil && Date.now() < unlockLockedUntil)}
                   onChange={(e) => setUnlockPinInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleUnlockSession(); }}
                   placeholder="Enter 4-digit Quick-PIN"
-                  className="w-full bg-[#08021C] border border-amber-500/50 focus:border-amber-400 rounded-xl px-4 py-3 text-center text-lg tracking-widest font-mono text-white focus:outline-none"
+                  className="w-full bg-[#08021C] border border-amber-500/50 focus:border-amber-400 rounded-xl px-4 py-3 text-center text-lg tracking-widest font-mono text-white focus:outline-none disabled:opacity-50"
                   autoFocus
                 />
                 {unlockError && (
-                  <div className="text-xs font-mono text-rose-400">{unlockError}</div>
+                  <div className="text-xs font-mono text-rose-400 bg-rose-950/40 border border-rose-500/30 p-2 rounded-lg">{unlockError}</div>
                 )}
                 <button
                   onClick={handleUnlockSession}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 font-mono font-bold text-xs uppercase text-black shadow-lg shadow-amber-600/30 transition-all active:scale-95"
+                  disabled={Boolean(unlockLockedUntil && Date.now() < unlockLockedUntil)}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 font-mono font-bold text-xs uppercase text-black shadow-lg shadow-amber-600/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   UNLOCK TERMINAL
                 </button>
@@ -2147,7 +2195,9 @@ export default function FluxGamingTerminal() {
             ) : (
               <div className="space-y-3">
                 <p className="text-xs font-mono text-slate-400">
-                  Single-window sessions cannot be resumed without wallet re-authorization.
+                  {activeSession?.storageType === "local" 
+                    ? "24-Hour session without a PIN requires wallet re-authorization to unlock." 
+                    : "Single-window sessions cannot be resumed without wallet re-authorization."}
                 </p>
                 <button
                   onClick={() => {
