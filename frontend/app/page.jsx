@@ -208,6 +208,15 @@ export default function FluxGamingTerminal() {
     };
   }, [priceHistory, monPrice, isPilotMode, isSimActive, effectivePrice]);
 
+  // Deterministic 16-Shard assignment for Monad's Block-STM parallel execution
+  const assignedShardId = useMemo(() => {
+    if (walletAddress) {
+      const lastByte = parseInt(walletAddress.slice(-2), 16);
+      return isNaN(lastByte) ? 0 : lastByte % 16;
+    }
+    return 7; // Default deterministic shard for Pilot Sandbox trader
+  }, [walletAddress]);
+
   // Real Pyth Hermes Oracle Price Feed (MON/USD) with fallback
   useEffect(() => {
     let alive = true;
@@ -1035,6 +1044,33 @@ export default function FluxGamingTerminal() {
     setTimeout(() => setTxToast(null), 5000);
   };
 
+  // Pro-Trader Global Hotkeys: [B] Buy, [S] Sell, [C] Close, [1] Toggle 1-Click
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignore if user is currently typing in an input or textarea
+      if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      const key = e.key.toLowerCase();
+      if (key === "b" && !activePosition && !isSubmitting && marginNum > 0) {
+        e.preventDefault();
+        handleOpenPosition(true);
+      } else if (key === "s" && !activePosition && !isSubmitting && marginNum > 0) {
+        e.preventDefault();
+        handleOpenPosition(false);
+      } else if (key === "c" && activePosition && !isSubmitting) {
+        e.preventDefault();
+        handleClosePosition();
+      } else if (key === "1") {
+        e.preventDefault();
+        handleToggle1Click();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activePosition, isSubmitting, marginNum, is1ClickTrading, activeSession]);
+
   const displayWallet = walletAddress 
     ? (walletAddress.length > 18 ? walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4) : walletAddress)
     : "CONNECT WALLET";
@@ -1168,12 +1204,32 @@ export default function FluxGamingTerminal() {
             </span>
           </div>
 
-          {/* Balance Pill */}
+          {/* Balance Pill with Instant Refill for Sandbox */}
           <div className="hidden sm:flex items-center space-x-1.5 bg-[#0C0726] border border-cyan-500/40 px-2.5 sm:px-3 py-1.5 rounded-xl font-mono shrink-0">
             <span className="text-[11px] text-slate-400 hidden md:inline">BAL:</span>
             <span className="text-xs sm:text-sm font-black text-cyan-300 tabular-nums">
               {userBalance.toFixed(3)} MON
             </span>
+            {isPilotMode && (
+              <button
+                type="button"
+                onClick={() => {
+                  updateTradingBalance(1000.0);
+                  setTxToast({
+                    title: "SANDBOX REFILL COMPLETE",
+                    amount: "Balance Reset to 1,000.00 MON",
+                    detail: "Fresh testing funds available for trades & stress testing.",
+                    type: "OPEN",
+                    isWin: true
+                  });
+                  setTimeout(() => setTxToast(null), 3000);
+                }}
+                title="Reset Sandbox Balance to 1,000 MON"
+                className="ml-1 text-[9px] bg-cyan-950 hover:bg-cyan-900 border border-cyan-400/60 text-cyan-300 px-1.5 py-0.5 rounded font-black hover:text-white transition-all active:scale-95"
+              >
+                REFILL
+              </button>
+            )}
           </div>
 
           {/* Quick Guide & Terminal Features Button */}
@@ -1395,6 +1451,9 @@ export default function FluxGamingTerminal() {
                   >
                     <XCircle className="w-4 h-4" />
                     <span>CLOSE & SETTLE PAYOUT</span>
+                    <span className="text-[10px] bg-black/40 text-rose-300 border border-rose-400/40 px-1.5 py-0.5 rounded font-bold ml-1">
+                      KEY [C]
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1432,8 +1491,8 @@ export default function FluxGamingTerminal() {
             </div>
           )}
 
-          {/* S-Tier Monad Block-STM Live Shard Heatmap */}
-          <ShardMonitor />
+          {/* S-Tier Monad Block-STM Live Shard Heatmap with Deterministic Trader Shard Highlighting */}
+          <ShardMonitor activeShardId={assignedShardId} />
         </section>
 
         {/* Right Col: Institutional Margin & Leverage Cockpit */}
@@ -1623,6 +1682,9 @@ export default function FluxGamingTerminal() {
                   <div className="flex items-center space-x-2">
                     <TrendingUp className="w-5 h-5" />
                     <span>BUY / LONG {leverage}x</span>
+                    <span className="hidden sm:inline-block text-[10px] bg-black/40 text-emerald-300 border border-emerald-400/40 px-1.5 py-0.5 rounded font-bold ml-1.5">
+                      KEY [B]
+                    </span>
                   </div>
                   <span className="text-xs font-mono bg-emerald-900/60 px-3 py-1 rounded-lg border border-emerald-400/40">
                     1.0s SETTLED
@@ -1637,6 +1699,9 @@ export default function FluxGamingTerminal() {
                   <div className="flex items-center space-x-2">
                     <TrendingDown className="w-5 h-5" />
                     <span>SELL / SHORT {leverage}x</span>
+                    <span className="hidden sm:inline-block text-[10px] bg-black/40 text-rose-300 border border-rose-400/40 px-1.5 py-0.5 rounded font-bold ml-1.5">
+                      KEY [S]
+                    </span>
                   </div>
                   <span className="text-xs font-mono bg-rose-900/60 px-3 py-1 rounded-lg border border-rose-400/40">
                     1.0s SETTLED
