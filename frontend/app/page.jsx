@@ -2460,6 +2460,17 @@ export default function FluxGamingTerminal() {
                       View live cost and latency metrics comparing Ethereum L1 ($14,400/day keeper costs), Arbitrum ($480/day), and Monad (&lt;$0.05/day for 86,400 daily block checkpoints).
                     </p>
                   </div>
+
+                  {/* Sandbox Feature 4: 1-Click Balance Refill & % Sizing Pills */}
+                  <div className="bg-[#070318] p-4 rounded-2xl border border-emerald-500/30 space-y-2">
+                    <div className="flex items-center space-x-2 text-emerald-300 font-bold text-sm">
+                      <RefreshCw className="w-4 h-4 text-emerald-400" />
+                      <span>INSTANT REFILL & 25% / 50% / 75% / MAX PILLS</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      Depleted your margin during stress testing? Click the <strong className="text-cyan-300">REFILL</strong> button in the balance pill to instantly restore 1,000 MON. Use quick percentage sizing pills to size positions in one click.
+                    </p>
+                  </div>
                 </>
               ) : (
                 <>
@@ -2501,14 +2512,25 @@ export default function FluxGamingTerminal() {
                 </>
               )}
 
-              {/* Shared Foundation Feature: 16-Shard Parallel EVM */}
+              {/* Shared Foundation Feature 1: Pro-Trader Keyboard Hotkeys */}
+              <div className="bg-[#070318] p-4 rounded-2xl border border-amber-500/30 space-y-2">
+                <div className="flex items-center space-x-2 text-amber-300 font-bold text-sm">
+                  <Sliders className="w-4 h-4 text-amber-400" />
+                  <span>PRO-TRADER HIGH-FREQUENCY HOTKEYS</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Zero-latency hotkey execution for pro traders: Press <strong className="text-emerald-300">[B]</strong> to Buy / Long, <strong className="text-rose-300">[S]</strong> to Sell / Short, <strong className="text-amber-300">[C]</strong> to Close & Settle, and <strong className="text-cyan-300">[1]</strong> to toggle 1-Click Trading.
+                </p>
+              </div>
+
+              {/* Shared Foundation Feature 2: 16-Shard Parallel EVM & Live Matrix */}
               <div className="bg-[#070318] p-4 rounded-2xl border border-indigo-500/30 space-y-2">
                 <div className="flex items-center space-x-2 text-indigo-300 font-bold text-sm">
                   <Cpu className="w-4 h-4 text-indigo-400" />
-                  <span>16-SHARD PARALLEL BLOCK-STM STORAGE</span>
+                  <span>16-SHARD PARALLEL BLOCK-STM STORAGE MATRIX</span>
                 </div>
                 <p className="text-slate-300 leading-relaxed">
-                  FluxState splits open interest and balances across 16 independent storage shards, maximizing Monad's Block-STM parallel execution engine and eliminating slot lockup aborts.
+                  FluxState splits open interest and balances across 16 independent storage shards. Look at the Shard Matrix to see <strong className="text-cyan-300">YOUR ASSIGNED SHARD (⭐ YOU)</strong> computed from your wallet address modulo 16, ensuring 0% abort contention in Monad's parallel VM.
                 </p>
               </div>
 
