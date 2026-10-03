@@ -1501,13 +1501,35 @@ export default function FluxGamingTerminal() {
                     ? "bg-emerald-950/40 border-emerald-500/50" 
                     : "bg-rose-950/40 border-rose-500/50"
                 )}>
-                  <div className="text-slate-400 mb-1">Unrealized PnL:</div>
+                  <div className="flex justify-between items-center text-slate-400 mb-1">
+                    <span>Net Unrealized PnL:</span>
+                    <span className="text-[10px] text-cyan-300 font-bold">1-SEC FUNDING APPLIED</span>
+                  </div>
                   <div className={"text-base font-black flex items-center " + (
                     currentPositionPnL.isProfit ? "text-emerald-400" : "text-rose-400"
                   )}>
                     {currentPositionPnL.isProfit ? <ArrowUpRight className="w-4 h-4 mr-0.5" /> : <ArrowDownRight className="w-4 h-4 mr-0.5" />}
                     {(currentPositionPnL.pnlMon >= 0 ? "+" : "") + currentPositionPnL.pnlMon.toFixed(2)} MON ({currentPositionPnL.pnlPercent.toFixed(1)}%)
                   </div>
+                  <div className="text-[10px] text-slate-400 mt-1 flex justify-between border-t border-purple-900/30 pt-1">
+                    <span>Accrued Block Funding:</span>
+                    <span className={"font-bold " + (activePosition.isLong ? "text-rose-400" : "text-emerald-400")}>
+                      {activePosition.isLong ? "-" : "+"}{blockFundingAccrual.toFixed(5)} MON
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Block Stream Funding Taximeter Ticker */}
+              <div className="mt-3 bg-[#08021C] border border-cyan-500/30 rounded-xl p-2.5 text-[11px] font-mono flex flex-wrap justify-between items-center text-slate-300">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  <span className="text-cyan-300 font-bold">BLOCK-BY-BLOCK FUNDING STREAM:</span>
+                  <span>Rate: <strong className="text-white">{blockFundingRateBps} / block</strong></span>
+                </div>
+                <div className="flex items-center space-x-3 text-[10px]">
+                  <span>Cadence: <strong>1.0s Monad Block</strong></span>
+                  <span className="text-emerald-400 font-bold">✓ Continuous Settlement</span>
                 </div>
               </div>
             </div>
@@ -1551,8 +1573,8 @@ export default function FluxGamingTerminal() {
             </div>
           )}
 
-          {/* S-Tier Monad Block-STM Live Shard Heatmap with Deterministic Trader Shard Highlighting */}
-          <ShardMonitor activeShardId={assignedShardId} />
+          {/* S-Tier Monad Block-STM Live Shard Heatmap with Deterministic Trader Shard Highlighting & Sandbox Parallel Stress Simulator */}
+          <ShardMonitor activeShardId={assignedShardId} isPilotMode={isPilotMode} />
 
           {/* S-Tier Monad EVM Feasibility & Economic Matrix (Balanced in 2-Col Section) */}
           <div className="glass-panel rounded-3xl p-5 border-purple-500/20 text-xs space-y-3 font-mono">
