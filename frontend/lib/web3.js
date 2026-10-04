@@ -22,6 +22,12 @@ export const monadTestnet = {
       url: "https://testnet.monadscan.com",
     },
   },
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+      blockCreated: 0,
+    },
+  },
   testnet: true,
 };
 
@@ -69,6 +75,16 @@ export const FLUX_MARKET_ABI = [
       { internalType: "uint32", name: "lastUpdatedBlock", type: "uint32" },
       { internalType: "bool", name: "isLong", type: "bool" },
       { internalType: "bool", name: "isActive", type: "bool" }
+    ],
+    stateMutability: "view",
+    type: "function"
+  },
+  {
+    inputs: [{ internalType: "uint8", name: "", type: "uint8" }],
+    name: "shards",
+    outputs: [
+      { internalType: "uint128", name: "longOI", type: "uint128" },
+      { internalType: "uint128", name: "shortOI", type: "uint128" }
     ],
     stateMutability: "view",
     type: "function"

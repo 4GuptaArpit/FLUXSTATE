@@ -58,10 +58,11 @@ Legacy perps (dYdX, GMX) recalculate funding only once every **1 to 8 hours** du
   - *24-Hour Persistent (LocalStorage)*: Protected by optional 4-digit Quick-PIN and 15-minute inactivity auto-lock.
 - **Zero-Withdrawal Guarantee**: Cryptographically restricted to trading calls only (`FluxMarket.openPosition` / `closePosition`); zero ability to transfer or withdraw underlying collateral.
 
-### 6. Sandbox Volatility Stress Tester & Keeper Sentinel
+### 6. Sandbox Volatility Stress Tester & Public Keeper Sentinel
 - **Risk Edge-Case Simulator**: Shift Pyth oracle prices by $\pm 40\%$ via an interactive slider without risking real MON.
 - **Real-Time Margin Health Bar**: Color-coded liquidation indicator (Green $\to$ Amber $\to$ Red) with one-click Keeper Liquidation settlement.
-- **Autonomous Keeper Sentinel**: Runs 3-second background checkpoints on `FluxFundingEngine.sol` with anti-sandwich block cooldown protection.
+- **Public Decentralized Keeper Fallback**: Allows any user or judge to trigger `checkpointFundingRate()` on-chain directly from the UI, ensuring censorship resistance if the primary autonomous sentinel experiences delay.
+- **Live On-Chain Monad Shard Reader**: Directly queries `shards(i)` on Monad Testnet via `publicClient.readContract`, verifying real-time EVM storage slot partitioning.
 
 ---
 
