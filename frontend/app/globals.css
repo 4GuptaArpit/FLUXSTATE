@@ -53,7 +53,7 @@ input[type="number"] {
 /* Industrial Brutalist Solid Panels (Zero roundness/gradients) */
 .glass-panel {
   background: #0E1015;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .glass-panel-glow {
@@ -82,3 +82,25 @@ input[type="number"] {
     linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
 }
 
+/* Industrial CRT Scanline Overlay Effect (Tactical Telemetry) */
+.crt-scanlines {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+}
+
+/* Hairline Blueprint Rules */
+.hairline-border {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ASCII Framing Helper */
+.ascii-bracket {
+  letter-spacing: 0.08em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
