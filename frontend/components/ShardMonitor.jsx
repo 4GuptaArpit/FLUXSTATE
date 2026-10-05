@@ -16,6 +16,7 @@ export const ShardMonitor = ({ activeShardId = null, isPilotMode = true }) => {
   const [isStressTesting, setIsStressTesting] = useState(false);
   const [stressBenchmark, setStressBenchmark] = useState(null);
   const [isOnchainLive, setIsOnchainLive] = useState(false);
+  const [pulseActiveIndex, setPulseActiveIndex] = useState(-1);
 
   // In Testnet mode, read actual on-chain storage slots from FluxMarket contract!
   useEffect(() => {
@@ -31,6 +32,9 @@ export const ShardMonitor = ({ activeShardId = null, isPilotMode = true }) => {
             shortOI: Math.max(1, +(s.shortOI + (Math.random() - 0.48) * 0.4).toFixed(1)),
           }))
         );
+        // Periodic hardware sweep pulse across shards
+        setPulseActiveIndex(Math.floor(Math.random() * 16));
+        setTimeout(() => setPulseActiveIndex(-1), 400);
       }, 1200);
       return () => clearInterval(interval);
     }
@@ -183,16 +187,19 @@ export const ShardMonitor = ({ activeShardId = null, isPilotMode = true }) => {
       >
         {shards.map((s) => {
           const isUserShard = activeShardId !== null && s.shardId === activeShardId;
+          const isPulsing = pulseActiveIndex === s.shardId;
           return (
             <div
               key={s.shardId}
               onMouseEnter={() => setHoveredShard(s)}
               className={"relative rounded-lg p-2 text-center cursor-pointer select-none transition-all " + (
                 isUserShard 
-                  ? "bg-cyan-950/40 border border-cyan-400/80 ring-1 ring-cyan-400/40 z-10" 
+                  ? "bg-cyan-950/50 border border-cyan-400 ring-1 ring-cyan-400/50 z-10" 
                   : isStressTesting 
-                    ? "bg-amber-950/20 border border-amber-500/40" 
-                    : "bg-[#141722] border border-white/[0.06] hover:border-white/20 hover:bg-[#181C2A]"
+                    ? "bg-amber-950/30 border border-amber-500/60 ring-1 ring-amber-400/40" 
+                    : isPulsing
+                      ? "bg-[#181C2A] border border-[#CCFF00]/60 ring-1 ring-[#CCFF00]/40"
+                      : "bg-[#141722] border border-white/[0.06] hover:border-white/20 hover:bg-[#181C2A]"
               )}
             >
               {isUserShard && (
@@ -200,7 +207,12 @@ export const ShardMonitor = ({ activeShardId = null, isPilotMode = true }) => {
                   CURRENT
                 </div>
               )}
-              <div className={"text-[9px] font-mono mb-0.5 font-semibold pointer-events-none " + (isUserShard ? "text-cyan-300" : "text-slate-400")}>
+              {isPulsing && !isUserShard && (
+                <div className="absolute -top-1.5 -right-1 text-[7px] bg-[#CCFF00] text-black px-1 rounded font-mono font-bold uppercase pointer-events-none animate-pulse">
+                  SYNC
+                </div>
+              )}
+              <div className={"text-[9px] font-mono mb-0.5 font-semibold pointer-events-none " + (isUserShard ? "text-cyan-300" : isPulsing ? "text-[#CCFF00]" : "text-slate-400")}>
                 SHARD #{s.shardId}
               </div>
               <div className="text-[11px] font-bold text-slate-100 font-mono tabular-nums pointer-events-none">{s.txCount} tx</div>

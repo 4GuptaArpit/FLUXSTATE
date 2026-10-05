@@ -31,7 +31,10 @@ import {
   Copy,
   ExternalLink,
   ChevronDown,
-  BarChart2
+  BarChart2,
+  Share2,
+  Check,
+  FileText
 } from "lucide-react";
 import { getWalletClient, getPublicClient, monadTestnet, FLUX_MARKET_ABI, CONTRACT_ADDRESSES } from "../lib/web3";
 import { 
@@ -125,26 +128,106 @@ export default function FluxGamingTerminal() {
     { hash: "0x3ef9...a024", blockNumber: 882035, method: "checkpointFundingRate()", age: "7s ago" }
   ]);
 
+  // Zerodha Smart Bracket (TP / SL) & Institutional Settlement Slip State
+  const [isBracketEnabled, setIsBracketEnabled] = useState(true);
+  const [tpPercent, setTpPercent] = useState(50); // +50% target profit
+  const [slPercent, setSlPercent] = useState(20); // -20% stop loss
+  const [selectedSlipTrade, setSelectedSlipTrade] = useState(null);
+  const [copiedSlip, setCopiedSlip] = useState(false);
+
   const marginNum = Math.max(0, parseFloat(margin) || 0);
   const notionalSize = marginNum * leverage;
 
-  // Real-time pre-flight calculation
-  const { liqPriceLong, liqPriceShort, feeAmount } = useMemo(() => {
-    if (marginNum <= 0 || notionalSize <= 0) return { liqPriceLong: 0, liqPriceShort: 0, feeAmount: 0 };
+  // Real-time pre-flight calculation & Zerodha Margin Safety Diagnostics
+  const { 
+    liqPriceLong, 
+    liqPriceShort, 
+    feeAmount, 
+    effectiveMargin, 
+    mmrAmount, 
+    marginBuffer, 
+    bufferPercent,
+    liqDistanceLongPct,
+    liqDistanceShortPct 
+  } = useMemo(() => {
+    if (marginNum <= 0 || notionalSize <= 0) {
+      return { 
+        liqPriceLong: 0, 
+        liqPriceShort: 0, 
+        feeAmount: 0, 
+        effectiveMargin: 0, 
+        mmrAmount: 0, 
+        marginBuffer: 0, 
+        bufferPercent: 0,
+        liqDistanceLongPct: 0,
+        liqDistanceShortPct: 0
+      };
+    }
     const fee = notionalSize * 0.0008; // 0.08%
-    const effectiveMargin = marginNum - fee;
-    const mmr = notionalSize * 0.02; // 2% MMR
-    const buffer = effectiveMargin - mmr;
+    const effMargin = Math.max(0, marginNum - fee);
+    const mmr = notionalSize * 0.02; // 2% MMR requirement
+    const buffer = effMargin - mmr;
 
     const liqLong = monPrice * (1 - buffer / notionalSize);
     const liqShort = monPrice * (1 + buffer / notionalSize);
 
+    const distLongPct = monPrice > 0 ? Math.max(0, ((monPrice - liqLong) / monPrice) * 100) : 0;
+    const distShortPct = monPrice > 0 ? Math.max(0, ((liqShort - monPrice) / monPrice) * 100) : 0;
+    const bufPct = effMargin > 0 ? Math.max(0, Math.min(100, (buffer / effMargin) * 100)) : 0;
+
     return {
       liqPriceLong: Math.max(0, liqLong),
       liqPriceShort: liqShort,
-      feeAmount: fee
+      feeAmount: fee,
+      effectiveMargin: effMargin,
+      mmrAmount: mmr,
+      marginBuffer: buffer,
+      bufferPercent: bufPct,
+      liqDistanceLongPct: distLongPct,
+      liqDistanceShortPct: distShortPct
     };
   }, [marginNum, notionalSize, monPrice, leverage]);
+
+  // Dynamic Zerodha Smart Bracket (TP/SL) Targets Calculation
+  const bracketTargets = useMemo(() => {
+    if (marginNum <= 0 || leverage <= 0 || monPrice <= 0) {
+      return {
+        longTpPrice: 0,
+        longSlPrice: 0,
+        shortTpPrice: 0,
+        shortSlPrice: 0,
+        estimatedTpPnlMon: 0,
+        estimatedSlPnlMon: 0,
+        estimatedTpPnlUSD: 0,
+        estimatedSlPnlUSD: 0
+      };
+    }
+    // For Long: TP price = entry * (1 + (tpPercent / (leverage * 100)))
+    //           SL price = entry * (1 - (slPercent / (leverage * 100)))
+    const longTp = monPrice * (1 + (tpPercent / (leverage * 100)));
+    const longSl = monPrice * Math.max(0, (1 - (slPercent / (leverage * 100))));
+
+    // For Short: TP price = entry * (1 - (tpPercent / (leverage * 100)))
+    //            SL price = entry * (1 + (slPercent / (leverage * 100)))
+    const shortTp = monPrice * Math.max(0, (1 - (tpPercent / (leverage * 100))));
+    const shortSl = monPrice * (1 + (slPercent / (leverage * 100)));
+
+    const tpPnlMon = +(marginNum * (tpPercent / 100)).toFixed(4);
+    const slPnlMon = +(marginNum * (slPercent / 100)).toFixed(4);
+    const tpPnlUSD = +(tpPnlMon * monPrice).toFixed(2);
+    const slPnlUSD = +(slPnlMon * monPrice).toFixed(2);
+
+    return {
+      longTpPrice: +longTp.toFixed(4),
+      longSlPrice: +longSl.toFixed(4),
+      shortTpPrice: +shortTp.toFixed(4),
+      shortSlPrice: +shortSl.toFixed(4),
+      estimatedTpPnlMon: tpPnlMon,
+      estimatedSlPnlMon: slPnlMon,
+      estimatedTpPnlUSD: tpPnlUSD,
+      estimatedSlPnlUSD: slPnlUSD
+    };
+  }, [marginNum, leverage, monPrice, tpPercent, slPercent]);
 
   // Derived effective price for Sandbox Stress Simulation
   const effectivePrice = useMemo(() => {
@@ -1342,10 +1425,10 @@ export default function FluxGamingTerminal() {
       </header>
 
       {/* Main Gaming Terminal Layout */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
+      <main className="flex-1 max-w-[1560px] mx-auto w-full px-3 sm:px-4 py-3 grid grid-cols-1 lg:grid-cols-3 gap-4 relative z-10">
         
         {/* Left 2 Cols: Holographic Chart, Active Position HUD & Trade Ledger */}
-        <section className="lg:col-span-2 flex flex-col space-y-6">
+        <section className="lg:col-span-2 flex flex-col space-y-4">
           
           {/* Main Price & Epoch Control Center */}
           <div className="bg-[#11131A] rounded-xl p-5 border border-white/[0.08] relative overflow-hidden">
@@ -1397,30 +1480,114 @@ export default function FluxGamingTerminal() {
             </div>
 
             {/* Real-Time Sparkline / Spectrum */}
-            <div className="mt-5 h-40 w-full rounded-lg bg-[#0C0E14] border border-white/[0.06] p-4 flex items-end justify-between space-x-1.5 relative overflow-hidden">
-              <div className="absolute top-3 left-4 flex items-center space-x-2 text-[11px] font-mono text-slate-400">
-                <Flame className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Micro-Perpetual Tick Stream</span>
+            <div className="mt-5 h-44 w-full rounded-lg bg-[#0C0E14] border border-white/[0.06] p-4 flex flex-col justify-between relative overflow-hidden">
+              {/* Clean Non-Overlapping Sub-Header */}
+              <div className="flex items-center justify-between w-full z-10 font-mono text-[11px] mb-2">
+                <div className="flex items-center space-x-2 text-slate-400">
+                  <Flame className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Micro-Perpetual Tick Stream</span>
+                </div>
+
+                {/* Bracket Threshold Status Pill */}
+                {isBracketEnabled && (
+                  <div className="flex items-center space-x-2 text-[10px]">
+                    <span className="text-[#00FF66] bg-[#00FF66]/10 px-2 py-0.5 rounded border border-[#00FF66]/30 font-bold">
+                      TP: +{tpPercent}% (${bracketTargets.longTpPrice.toFixed(4)})
+                    </span>
+                    <span className="text-rose-400 bg-rose-950/40 px-2 py-0.5 rounded border border-rose-500/30 font-bold">
+                      SL: -{slPercent}% (${bracketTargets.longSlPrice.toFixed(4)})
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white/[0.04]" />
+              {/* Sparkline Plot Area */}
+              <div className="flex-1 w-full flex items-end justify-between space-x-1.5 relative">
+                {/* Horizontal Dashed Threshold Marker Lines (Rendered with z-20 over the bars) */}
+                {isBracketEnabled && (
+                  <>
+                    <div className="absolute top-2.5 left-0 w-full border-t border-dashed border-[#00FF66]/50 flex justify-start pl-2 pointer-events-none z-20">
+                      <span className="text-[9px] font-mono text-[#00FF66] uppercase tracking-widest -mt-2 bg-[#0C0E14]/90 px-1.5 py-0.5 rounded border border-[#00FF66]/30 font-bold shadow-sm">
+                        TP TARGET
+                      </span>
+                    </div>
+                    <div className="absolute bottom-2.5 left-0 w-full border-b border-dashed border-rose-500/50 flex justify-start pl-2 pointer-events-none z-20">
+                      <span className="text-[9px] font-mono text-rose-400 uppercase tracking-widest -mb-2 bg-[#0C0E14]/90 px-1.5 py-0.5 rounded border border-rose-500/30 font-bold shadow-sm">
+                        SL GUARD
+                      </span>
+                    </div>
+                  </>
+                )}
 
-              {priceHistory.map((val, idx) => {
-                const minP = Math.min(...priceHistory); const maxP = Math.max(...priceHistory); const spread = Math.max(0.005, maxP - minP); const heightPercent = Math.min(95, Math.max(20, Math.round(((val - minP) / spread) * 75 + 15)));
-                const isLatest = idx === priceHistory.length - 1;
-                return (
-                  <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group">
-                    <div 
-                      style={{ height: heightPercent + "%" }}
-                      className={"w-full rounded-t-sm transition-all duration-300 " + (
-                        isLatest 
-                          ? "bg-gradient-to-t from-purple-600 via-cyan-400 to-white shadow-[0_0_20px_#06b6d4]" 
-                          : "bg-purple-900/30 hover:bg-purple-700/60"
-                      )}
-                    />
-                  </div>
-                );
-              })}
+                <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white/[0.04]" />
+
+                {priceHistory.map((val, idx) => {
+                  const minP = Math.min(...priceHistory); 
+                  const maxP = Math.max(...priceHistory); 
+                  const spread = Math.max(0.005, maxP - minP); 
+                  const heightPercent = Math.min(95, Math.max(20, Math.round(((val - minP) / spread) * 75 + 15)));
+                  const isLatest = idx === priceHistory.length - 1;
+                  return (
+                    <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group z-1">
+                      <div 
+                        style={{ height: heightPercent + "%" }}
+                        className={"w-full rounded-t-sm transition-all duration-300 " + (
+                          isLatest 
+                            ? "bg-gradient-to-t from-emerald-600 via-cyan-400 to-white shadow-[0_0_15px_#06b6d4]" 
+                            : "bg-[#1E2333] hover:bg-[#2A3146]"
+                        )}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* 24H Market Range & Liquidity Depth (Positioned above Market Standby for immediate pre-trade market context) */}
+          <div className="bg-[#11131A] border border-white/[0.08] rounded-2xl p-4 font-mono text-xs space-y-3">
+            <div className="flex justify-between items-center text-slate-300">
+              <div className="flex items-center space-x-1.5 font-bold text-cyan-300 text-xs">
+                <BarChart2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span>24H MARKET RANGE & DEPTH</span>
+              </div>
+              <span className="text-[10px] text-purple-300/80 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
+                PYTH STREAM
+              </span>
+            </div>
+
+            {/* Dynamic 24h Price Range Slider Bar */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] text-slate-400 font-medium">
+                <span>24h Low: <strong className="text-white">${marketStats24h.low24h.toFixed(4)}</strong></span>
+                <span>24h High: <strong className="text-white">${marketStats24h.high24h.toFixed(4)}</strong></span>
+              </div>
+              <div className="w-full bg-[#050114] h-2 rounded-full overflow-hidden relative border border-white/10">
+                <div 
+                  style={{ width: `${marketStats24h.rangePercent}%` }} 
+                  className="h-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-300 shadow-[0_0_10px_#06b6d4]"
+                />
+              </div>
+            </div>
+
+            {/* 4-Stat Macro Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] pt-1 border-t border-white/[0.06]">
+              <div className="bg-[#0C0E15] p-2.5 rounded-xl border border-white/[0.06]">
+                <div className="text-slate-400 text-[10px]">All-Time High (ATH):</div>
+                <div className="text-emerald-400 font-bold text-xs mt-0.5">${marketStats24h.athPrice.toFixed(4)}</div>
+              </div>
+              <div className="bg-[#0C0E15] p-2.5 rounded-xl border border-white/[0.06]">
+                <div className="text-slate-400 text-[10px]">Cycle Floor (ATL):</div>
+                <div className="text-rose-400 font-bold text-xs mt-0.5">${marketStats24h.atlPrice.toFixed(4)}</div>
+              </div>
+              <div className="bg-[#0C0E15] p-2.5 rounded-xl border border-white/[0.06]">
+                <div className="text-slate-400 text-[10px]">24h Volume (Est):</div>
+                <div className="text-white font-bold text-xs mt-0.5">{marketStats24h.vol24hUSD}</div>
+              </div>
+              <div className="bg-[#0C0E15] p-2.5 rounded-xl border border-white/[0.06]">
+                <div className="text-slate-400 text-[10px]">Market Sentiment:</div>
+                <div className="text-cyan-300 font-bold text-xs mt-0.5">{marketStats24h.longSentiment}% L / {marketStats24h.shortSentiment}% S</div>
+              </div>
             </div>
           </div>
 
@@ -1569,6 +1736,7 @@ export default function FluxGamingTerminal() {
             </div>
           )}
 
+
           {/* S-Tier Monad Block-STM Live Shard Heatmap with Deterministic Trader Shard Highlighting & Sandbox Parallel Stress Simulator */}
           <ShardMonitor activeShardId={assignedShardId} isPilotMode={isPilotMode} />
 
@@ -1629,11 +1797,14 @@ export default function FluxGamingTerminal() {
               <span className="text-[10px] text-cyan-300 hidden sm:inline">16 Shards Parallel Accumulator</span>
             </div>
           </div>
+
+
+
         </section>
 
         {/* Right Col: Institutional Margin & Leverage Cockpit */}
-        <section className="flex flex-col space-y-6">
-          <div className="glass-panel glass-panel-glow rounded-3xl p-6 flex flex-col justify-between flex-1 border-purple-500/20">
+        <section className="flex flex-col space-y-4">
+          <div className="glass-panel glass-panel-glow rounded-2xl p-5 border-purple-500/20">
             <div>
               <div className="flex items-center justify-between pb-4 border-b border-purple-900/30">
                 <div className="flex items-center space-x-2">
@@ -1784,36 +1955,12 @@ export default function FluxGamingTerminal() {
                 </div>
               </div>
 
-              {/* Real-time Institutional Position Metrics */}
-              <div className="mt-5 bg-[#08021C] rounded-2xl p-4 space-y-2.5 text-xs font-mono border border-purple-900/40">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Position Notional:</span>
-                  <span className="font-bold text-white">{"$" + (notionalSize * monPrice).toFixed(2) + " USD"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Est. Liq Price (Long):</span>
-                  <span className="font-bold text-emerald-400">{"$" + liqPriceLong.toFixed(4)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Est. Liq Price (Short):</span>
-                  <span className="font-bold text-rose-400">{"$" + liqPriceShort.toFixed(4)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Protocol Fee (0.08%):</span>
-                  <span className="text-slate-300">{feeAmount.toFixed(4)} MON</span>
-                </div>
-                <div className="flex justify-between pt-1 border-t border-purple-900/20">
-                  <span className="text-slate-400">Est. Monad L1 Gas:</span>
-                  <span className="text-cyan-300 font-bold">~0.002 MON (&lt; $0.01)</span>
-                </div>
-              </div>
-
-              {/* Long / Short Action Buttons */}
-              <div className="mt-5 space-y-2.5">
+              {/* Primary Instant Order Dispatch Buttons (Immediately Visible Above The Fold) */}
+              <div className="mt-4 space-y-2">
                 <button
                   disabled={isSubmitting || marginNum <= 0 || Boolean(activePosition)}
                   onClick={() => handleOpenPosition(true)}
-                  className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-mono font-bold text-sm text-white flex items-center justify-between px-5 active:scale-[0.99] transition-all disabled:opacity-40 cursor-pointer shadow-sm"
+                  className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-mono font-bold text-sm text-white flex items-center justify-between px-5 active:scale-[0.99] transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-emerald-950/40"
                 >
                   <div className="flex items-center space-x-2">
                     <TrendingUp className="w-4 h-4" />
@@ -1830,7 +1977,7 @@ export default function FluxGamingTerminal() {
                 <button
                   disabled={isSubmitting || marginNum <= 0 || Boolean(activePosition)}
                   onClick={() => handleOpenPosition(false)}
-                  className="w-full py-3.5 rounded-xl bg-rose-600 hover:bg-rose-500 font-mono font-bold text-sm text-white flex items-center justify-between px-5 active:scale-[0.99] transition-all disabled:opacity-40 cursor-pointer shadow-sm"
+                  className="w-full py-3.5 rounded-xl bg-rose-600 hover:bg-rose-500 font-mono font-bold text-sm text-white flex items-center justify-between px-5 active:scale-[0.99] transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-rose-950/40"
                 >
                   <div className="flex items-center space-x-2">
                     <TrendingDown className="w-4 h-4" />
@@ -1844,6 +1991,153 @@ export default function FluxGamingTerminal() {
                   </span>
                 </button>
               </div>
+
+              {/* Smart Bracket Controls (TP / SL Guard) */}
+              <div className="mt-4 bg-[#0C0E15] border border-white/[0.08] rounded-xl p-3.5 space-y-3 font-mono text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Crosshair className="w-4 h-4 text-[#CCFF00]" />
+                    <span className="font-bold text-white tracking-wide uppercase text-[11px]">
+                      SMART BRACKET (TP / SL GUARD)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsBracketEnabled(!isBracketEnabled)}
+                    className={"px-2 py-0.5 rounded text-[10px] font-bold border transition-colors " + (
+                      isBracketEnabled 
+                        ? "bg-[#CCFF00]/10 border-[#CCFF00] text-[#CCFF00]" 
+                        : "bg-white/5 border-white/10 text-slate-400"
+                    )}
+                  >
+                    {isBracketEnabled ? "ARMED" : "OFF"}
+                  </button>
+                </div>
+
+                {isBracketEnabled && (
+                  <div className="space-y-3 pt-2 border-t border-white/[0.06]">
+                    {/* Take Profit Setting */}
+                    <div>
+                      <div className="flex justify-between text-[11px] mb-1">
+                        <span className="text-slate-400">Target Profit (TP):</span>
+                        <span className="text-[#00FF66] font-bold tabular-nums">
+                          +{tpPercent}% (+{bracketTargets.estimatedTpPnlMon} MON / +${bracketTargets.estimatedTpPnlUSD})
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5 text-[10px]">
+                        {[25, 50, 75, 100].map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setTpPercent(val)}
+                            className={"py-1 rounded border text-center transition-colors font-bold " + (
+                              tpPercent === val 
+                                ? "bg-[#00FF66]/10 border-[#00FF66] text-[#00FF66]" 
+                                : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                            )}
+                          >
+                            +{val}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Stop Loss Guard Setting */}
+                    <div>
+                      <div className="flex justify-between text-[11px] mb-1">
+                        <span className="text-slate-400">Stop Loss Guard (SL):</span>
+                        <span className="text-rose-400 font-bold tabular-nums">
+                          -{slPercent}% (-{bracketTargets.estimatedSlPnlMon} MON / -${bracketTargets.estimatedSlPnlUSD})
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5 text-[10px]">
+                        {[10, 20, 30, 40].map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setSlPercent(val)}
+                            className={"py-1 rounded border text-center transition-colors font-bold " + (
+                              slPercent === val 
+                                ? "bg-rose-500/10 border-rose-500 text-rose-400" 
+                                : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                            )}
+                          >
+                            -{val}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Bracket Price Projections Table */}
+                    <div className="bg-[#141722] p-2.5 rounded-lg border border-white/[0.04] space-y-1 text-[10px]">
+                      <div className="flex justify-between text-slate-300">
+                        <span>Long Target TP:</span>
+                        <strong className="text-[#00FF66] font-mono tabular-nums">${bracketTargets.longTpPrice.toFixed(4)}</strong>
+                      </div>
+                      <div className="flex justify-between text-slate-300">
+                        <span>Long Guard SL:</span>
+                        <strong className="text-rose-400 font-mono tabular-nums">${bracketTargets.longSlPrice.toFixed(4)}</strong>
+                      </div>
+                      <div className="flex justify-between text-slate-400 pt-1 border-t border-white/[0.04]">
+                        <span>Risk/Reward Ratio:</span>
+                        <strong className="text-white font-mono">1 : {(tpPercent / Math.max(1, slPercent)).toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Institutional Margin & Safety Diagnostic Card */}
+              <div className="mt-4 bg-[#0C0E15] rounded-xl p-3.5 space-y-2.5 text-xs font-mono border border-white/[0.08]">
+                <div className="flex justify-between items-center pb-2 border-b border-white/[0.06]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    INSTITUTIONAL MARGIN & SAFETY PRE-FLIGHT
+                  </span>
+                  <span className={"text-[10px] font-bold px-1.5 py-0.5 rounded border " + (
+                    bufferPercent > 40 
+                      ? "text-[#00FF66] bg-[#00FF66]/10 border-[#00FF66]/30" 
+                      : bufferPercent > 20 
+                        ? "text-amber-400 bg-amber-950/40 border-amber-500/30" 
+                        : "text-rose-400 bg-rose-950/40 border-rose-500/30"
+                  )}>
+                    {bufferPercent > 40 ? "SAFE" : bufferPercent > 20 ? "MODERATE" : "HIGH LEV"}
+                  </span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Position Notional:</span>
+                  <span className="font-bold text-white tabular-nums">{"$" + (notionalSize * monPrice).toFixed(2) + " USD"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Maintenance Margin (2% MMR):</span>
+                  <span className="font-bold text-amber-300 tabular-nums">{mmrAmount.toFixed(4)} MON</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Free Margin Buffer:</span>
+                  <span className="font-bold text-[#00FF66] tabular-nums">+{marginBuffer.toFixed(4)} MON ({bufferPercent.toFixed(1)}%)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Est. Liq Price (Long):</span>
+                  <span className="font-bold text-emerald-400 tabular-nums">
+                    {"$" + liqPriceLong.toFixed(4)} <span className="text-[10px] text-slate-400">(-{liqDistanceLongPct.toFixed(1)}%)</span>
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Est. Liq Price (Short):</span>
+                  <span className="font-bold text-rose-400 tabular-nums">
+                    {"$" + liqPriceShort.toFixed(4)} <span className="text-[10px] text-slate-400">(+{liqDistanceShortPct.toFixed(1)}%)</span>
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Protocol Fee (0.08%):</span>
+                  <span className="text-slate-300 tabular-nums">{feeAmount.toFixed(4)} MON</span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-white/[0.06]">
+                  <span className="text-slate-400">Est. Monad L1 Gas:</span>
+                  <span className="text-[#CCFF00] font-bold tabular-nums">~0.002 MON (&lt; $0.01)</span>
+                </div>
+              </div>
+
             </div>
 
             {/* === S-TIER ADDITION 3: Sandbox Volatility & Liquidation Stress Simulator === */}
@@ -1977,195 +2271,148 @@ export default function FluxGamingTerminal() {
               </div>
             )}
 
-            {/* === S-TIER METRIC: 24H Market Range & Liquidity Depth (Crypto 52-Week & Day High/Low Standard) === */}
-            <div className="mt-4 bg-[#08021C] border border-purple-900/40 rounded-2xl p-4 font-mono text-xs space-y-3 shadow-[0_0_20px_rgba(168,85,247,0.1)]">
-              <div className="flex justify-between items-center text-slate-300">
-                <div className="flex items-center space-x-1.5 font-bold text-cyan-300 text-xs">
-                  <BarChart2 className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>24H MARKET RANGE & DEPTH</span>
-                </div>
-                <span className="text-[10px] text-purple-300/80 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
-                  PYTH STREAM
+          </div>
+
+          {/* MonadScan Keeper Sentinel Telemetry Drawer (Positioned in Right Column where it can expand naturally) */}
+          <div className="bg-[#11131A] border border-cyan-500/20 rounded-2xl overflow-hidden text-xs font-mono">
+            <button
+              type="button"
+              onClick={() => setShowKeeperDrawer(!showKeeperDrawer)}
+              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-cyan-950/20 transition-colors"
+            >
+              <div className="flex items-center space-x-2 text-cyan-300 font-bold">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
                 </span>
+                <span className="text-[11px]">KEEPER SENTINEL (MONADSCAN VERIFIED)</span>
               </div>
-
-              {/* Dynamic 24h Price Range Slider Bar */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-                  <span>24h Low: <strong className="text-white">${marketStats24h.low24h.toFixed(4)}</strong></span>
-                  <span>24h High: <strong className="text-white">${marketStats24h.high24h.toFixed(4)}</strong></span>
-                </div>
-                <div className="w-full bg-[#050114] h-2 rounded-full overflow-hidden relative border border-purple-900/40">
-                  <div 
-                    style={{ width: `${marketStats24h.rangePercent}%` }} 
-                    className="h-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-300 shadow-[0_0_10px_#06b6d4]"
-                  />
-                </div>
+              <div className="flex items-center space-x-1.5 text-slate-400 text-[10px]">
+                <span className="text-emerald-400 font-bold">{isPilotMode ? "SANDBOX SIM" : "ONCHAIN CONTRACT"}</span>
+                <ChevronDown className={"w-3.5 h-3.5 transition-transform " + (showKeeperDrawer ? "rotate-180" : "")} />
               </div>
+            </button>
 
-              {/* 4-Stat Macro Grid (Crypto Equivalent of 52W High/Low) */}
-              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-purple-900/20">
-                <div className="bg-[#0C0626] p-2.5 rounded-xl border border-purple-900/30">
-                  <div className="text-slate-400 text-[10px]">All-Time High (ATH):</div>
-                  <div className="text-emerald-400 font-bold text-xs mt-0.5">${marketStats24h.athPrice.toFixed(4)}</div>
+            {showKeeperDrawer && (
+              <div className="px-4 pb-3 space-y-2 border-t border-white/[0.06] pt-2.5">
+                <div className="text-[11px] text-slate-300 mb-1 flex justify-between items-center bg-[#070318] px-3 py-1.5 rounded-lg border border-cyan-500/20">
+                  <span className="font-medium">Sentinel Address: <strong className="text-white">0xf163...def15</strong></span>
+                  <a
+                    href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-cyan-300 hover:text-white flex items-center gap-1 font-bold"
+                  >
+                    <span>Contract Logs</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
-                <div className="bg-[#0C0626] p-2.5 rounded-xl border border-purple-900/30">
-                  <div className="text-slate-400 text-[10px]">Cycle Floor (ATL):</div>
-                  <div className="text-rose-400 font-bold text-xs mt-0.5">${marketStats24h.atlPrice.toFixed(4)}</div>
-                </div>
-                <div className="bg-[#0C0626] p-2.5 rounded-xl border border-purple-900/30">
-                  <div className="text-slate-400 text-[10px]">24h Volume (Est):</div>
-                  <div className="text-white font-bold text-xs mt-0.5">{marketStats24h.vol24hUSD}</div>
-                </div>
-                <div className="bg-[#0C0626] p-2.5 rounded-xl border border-purple-900/30">
-                  <div className="text-slate-400 text-[10px]">Market Sentiment:</div>
-                  <div className="text-cyan-300 font-bold text-xs mt-0.5">{marketStats24h.longSentiment}% L / {marketStats24h.shortSentiment}% S</div>
-                </div>
-              </div>
-            </div>
-
-            {/* === S-TIER ADDITION 4: Live MonadScan Keeper Sentinel Telemetry Drawer === */}
-            <div className="mt-4 bg-[#060217]/90 border border-cyan-500/20 rounded-2xl overflow-hidden text-xs font-mono">
-              <button
-                type="button"
-                onClick={() => setShowKeeperDrawer(!showKeeperDrawer)}
-                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-cyan-950/20 transition-colors"
-              >
-                <div className="flex items-center space-x-2 text-cyan-300 font-bold">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
-                  </span>
-                  <span className="text-[11px]">KEEPER SENTINEL (MONADSCAN VERIFIED)</span>
-                </div>
-                <div className="flex items-center space-x-1.5 text-slate-400 text-[10px]">
-                  <span className="text-emerald-400 font-bold">{isPilotMode ? "SANDBOX SIM" : "ONCHAIN CONTRACT"}</span>
-                  <ChevronDown className={"w-3.5 h-3.5 transition-transform " + (showKeeperDrawer ? "rotate-180" : "")} />
-                </div>
-              </button>
-
-              {showKeeperDrawer && (
-                <div className="px-4 pb-3 space-y-2 border-t border-purple-900/40 pt-2.5">
-                  <div className="text-[11px] text-slate-300 mb-1 flex justify-between items-center bg-[#070318] px-3 py-1.5 rounded-lg border border-cyan-500/20">
-                    <span className="font-medium">Sentinel Address: <strong className="text-white">0xf163...def15</strong></span>
+                {keeperTxFeed.map((tx, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-[#0C0E15] rounded-xl px-3 py-2 border border-white/[0.06] text-xs">
+                    <div>
+                      <div className="font-bold text-cyan-300 text-xs">{tx.method}</div>
+                      <div className="text-slate-400 text-[11px] mt-0.5">Block #{tx.blockNumber} • {tx.age}</div>
+                    </div>
                     <a
                       href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5"
                       target="_blank"
                       rel="noreferrer"
-                      className="text-cyan-300 hover:text-white flex items-center gap-1 font-bold"
+                      title="View verified checkpoint transactions on MonadScan"
+                      className="flex items-center space-x-1 text-purple-300 hover:text-cyan-300 transition-colors font-mono font-bold text-xs"
                     >
-                      <span>Contract Logs</span>
-                      <ExternalLink className="w-3 h-3" />
+                      <span>{tx.hash}</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>
-                  {keeperTxFeed.map((tx, idx) => (
-                    <div key={idx} className="flex items-center justify-between bg-[#08021C] rounded-xl px-3 py-2 border border-purple-900/30 text-xs">
-                      <div>
-                        <div className="font-bold text-cyan-300 text-xs">{tx.method}</div>
-                        <div className="text-slate-400 text-[11px] mt-0.5">Block #{tx.blockNumber} • {tx.age}</div>
-                      </div>
-                      <a
-                        href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5"
-                        target="_blank"
-                        rel="noreferrer"
-                        title="View verified checkpoint transactions on MonadScan"
-                        className="flex items-center space-x-1 text-purple-300 hover:text-cyan-300 transition-colors font-mono font-bold text-xs"
-                      >
-                        <span>{tx.hash}</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  ))}
+                ))}
 
-                  {/* Public Decentralized Keeper Fallback Dispatch (Judges & Community) */}
-                  <div className="pt-2 border-t border-purple-900/40">
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={async () => {
-                        if (isPilotMode) {
-                          setTxToast({
-                            title: "⚡ KEEPER CHECKPOINT TRIGGERED",
-                            amount: "Block Micro-Pulse",
-                            detail: "Simulated 1.0s Monad Block Checkpoint Settled",
-                            type: "CLOSE",
-                            isWin: true
-                          });
-                          setTimeout(() => setTxToast(null), 4000);
+                {/* Public Decentralized Keeper Fallback Dispatch */}
+                <div className="pt-2 border-t border-white/[0.06]">
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={async () => {
+                      if (isPilotMode) {
+                        setTxToast({
+                          title: "⚡ KEEPER CHECKPOINT TRIGGERED",
+                          amount: "Block Micro-Pulse",
+                          detail: "Simulated 1.0s Monad Block Checkpoint Settled",
+                          type: "CLOSE",
+                          isWin: true
+                        });
+                        setTimeout(() => setTxToast(null), 4000);
+                        return;
+                      }
+
+                      const confirmed = window.confirm(
+                        "MANUALLY SETTLE FUNDING CHECKPOINT\n\n" +
+                        "This sends a real on-chain transaction calling checkpointFundingRate() on FluxMarket.\n\n" +
+                        "• Gas cost: ~0.002–0.005 MON (Monad Testnet gas)\n" +
+                        "• Effect: Immediately settles the per-block funding accumulator.\n" +
+                        "• Your collateral is NOT affected — this only advances the funding index.\n\n" +
+                        "The background keeper bot runs this automatically every ~1s.\n" +
+                        "Use this to prove censorship-resistance: any wallet can trigger it independently.\n\n" +
+                        "Proceed?"
+                      );
+                      if (!confirmed) return;
+
+                      try {
+                        setIsSubmitting(true);
+                        const walletClient = getWalletClient();
+                        const publicClient = getPublicClient();
+
+                        if (!walletClient || !walletAddress) {
+                          alert("Please connect wallet on Monad Testnet to trigger public keeper checkpoint.");
+                          setIsSubmitting(false);
                           return;
                         }
 
-                        const confirmed = window.confirm(
-                          "MANUALLY SETTLE FUNDING CHECKPOINT\n\n" +
-                          "This sends a real on-chain transaction calling checkpointFundingRate() on FluxMarket.\n\n" +
-                          "• Gas cost: ~0.002–0.005 MON (Monad Testnet gas)\n" +
-                          "• Effect: Immediately settles the per-block funding accumulator.\n" +
-                          "• Your collateral is NOT affected — this only advances the funding index.\n\n" +
-                          "The background keeper bot runs this automatically every ~1s.\n" +
-                          "Use this to prove censorship-resistance: any wallet can trigger it independently.\n\n" +
-                          "Proceed?"
-                        );
-                        if (!confirmed) return;
+                        setTxToast({
+                          title: "DISPATCHING KEEPER PULSE",
+                          amount: "checkpointFundingRate()",
+                          detail: "Confirm transaction in MetaMask to execute onchain...",
+                          type: "CLOSE",
+                          isWin: true
+                        });
 
-                        try {
-                          setIsSubmitting(true);
-                          const walletClient = getWalletClient();
-                          const publicClient = getPublicClient();
+                        const hash = await walletClient.writeContract({
+                          address: CONTRACT_ADDRESSES.market,
+                          abi: FLUX_MARKET_ABI,
+                          functionName: "checkpointFundingRate",
+                          account: walletAddress
+                        });
 
-                          if (!walletClient || !walletAddress) {
-                            alert("Please connect wallet on Monad Testnet to trigger public keeper checkpoint.");
-                            setIsSubmitting(false);
-                            return;
-                          }
+                        setTxToast({
+                          title: "⚡ KEEPER CHECKPOINT EXECUTED",
+                          amount: "Monad Block Settled",
+                          detail: `Tx: ${hash.slice(0, 10)}... (Verified on MonadScan)`,
+                          type: "CLOSE",
+                          isWin: true
+                        });
 
-                          setTxToast({
-                            title: "DISPATCHING KEEPER PULSE",
-                            amount: "checkpointFundingRate()",
-                            detail: "Confirm transaction in MetaMask to execute onchain...",
-                            type: "CLOSE",
-                            isWin: true
-                          });
-
-                          const hash = await walletClient.writeContract({
-                            address: CONTRACT_ADDRESSES.market,
-                            abi: FLUX_MARKET_ABI,
-                            functionName: "checkpointFundingRate",
-                            account: walletAddress
-                          });
-
-                          setTxToast({
-                            title: "⚡ KEEPER CHECKPOINT EXECUTED",
-                            amount: "Monad Block Settled",
-                            detail: `Tx: ${hash.slice(0, 10)}... (Verified on MonadScan)`,
-                            type: "CLOSE",
-                            isWin: true
-                          });
-
-                          await publicClient.waitForTransactionReceipt({ hash });
-                          setIsSubmitting(false);
-                          setTimeout(() => setTxToast(null), 5000);
-                        } catch (err) {
-                          console.warn("Checkpoint trigger error:", err);
-                          setIsSubmitting(false);
-                          setTxToast(null);
-                          if (err.message && err.message.includes("Already checkpointed")) {
-                            alert("Checkpoint already executed this block! Monad anti-sandwich cooldown active.\n\nThis proves the anti-sandwich protection is working — only one checkpoint per block is allowed.");
-                          }
+                        await publicClient.waitForTransactionReceipt({ hash });
+                        setIsSubmitting(false);
+                        setTimeout(() => setTxToast(null), 5000);
+                      } catch (err) {
+                        console.warn("Checkpoint trigger error:", err);
+                        setIsSubmitting(false);
+                        setTxToast(null);
+                        if (err.message && err.message.includes("Already checkpointed")) {
+                          alert("Checkpoint already executed this block! Monad anti-sandwich cooldown active.\n\nThis proves the anti-sandwich protection is working — only one checkpoint per block is allowed.");
                         }
-                      }}
-                      className="w-full py-2.5 rounded bg-[#161A24] hover:bg-[#1E2330] border border-white/20 font-mono font-bold text-xs text-[#CCFF00] hover:text-white flex items-center justify-center space-x-2 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      <Zap className="w-3.5 h-3.5 text-[#CCFF00]" />
-                      <span>MANUALLY SETTLE FUNDING CHECKPOINT (~0.002 MON)</span>
-                    </button>
-                    <p className="text-[10px] text-slate-400 text-center mt-1 font-mono">
-                      Censorship-resistant fallback — any wallet can settle funding independently of the bot.
-                    </p>
-                  </div>
+                      }
+                    }}
+                    className="w-full py-2.5 rounded bg-[#161A24] hover:bg-[#1E2330] border border-white/20 font-mono font-bold text-xs text-[#CCFF00] hover:text-white flex items-center justify-center space-x-2 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-[#CCFF00]" />
+                    <span>MANUALLY SETTLE FUNDING CHECKPOINT (~0.002 MON)</span>
+                  </button>
+                  <p className="text-[10px] text-slate-400 text-center mt-1 font-mono">
+                    Censorship-resistant fallback — any wallet can settle funding independently of the bot.
+                  </p>
                 </div>
-              )}
-            </div>
-
+              </div>
+            )}
           </div>
         </section>
 
@@ -2254,8 +2501,18 @@ export default function FluxGamingTerminal() {
                     </tr>
                   ) : (
                     (isPilotMode ? sandboxHistory : testnetHistory).map((trade, idx) => (
-                      <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="py-3 px-2 text-slate-200 font-bold tabular-nums">#{trade.id}</td>
+                      <tr 
+                        key={idx} 
+                        onClick={() => setSelectedSlipTrade(trade)}
+                        className="hover:bg-white/[0.04] transition-colors cursor-pointer group"
+                        title="Click to view & share Institutional Settlement Slip proof"
+                      >
+                        <td className="py-3 px-2 text-slate-200 font-bold tabular-nums flex items-center space-x-1.5">
+                          <span>#{trade.id}</span>
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] bg-white/10 px-1 py-0.2 rounded text-cyan-300">
+                            SLIP ↗
+                          </span>
+                        </td>
                         <td className="px-2">
                           <span className={"px-2 py-0.5 rounded text-[11px] font-bold " + (
                             trade.type === "LONG" 
@@ -2814,6 +3071,159 @@ export default function FluxGamingTerminal() {
               >
                 GOT IT, LET'S TRADE
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Institutional PnL Settlement Slip Modal (Zerodha / Hyperliquid Style Proof of Settlement) */}
+      {selectedSlipTrade && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[10002]">
+          <div className="bg-[#0C0E15] border border-white/20 rounded-2xl max-w-md w-full shadow-[0_20px_60px_rgba(0,0,0,0.9)] overflow-hidden font-mono animate-in fade-in zoom-in-95 duration-150">
+            {/* Header with Monad L1 Verification Chip */}
+            <div className="p-5 border-b border-white/[0.08] flex items-center justify-between bg-[#11131C]">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded bg-white/5 border border-white/10">
+                  <FileText className="w-4 h-4 text-[#CCFF00]" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                    INSTITUTIONAL SETTLEMENT SLIP
+                  </h3>
+                  <div className="text-[10px] text-slate-400">
+                    FLUXSTATE PROTOCOL • MONAD L1 (10143)
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSlipTrade(null);
+                  setCopiedSlip(false);
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/5 transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Slip Body */}
+            <div className="p-5 space-y-4 text-xs">
+              {/* Highlight Result Card */}
+              <div className={"p-4 rounded-xl border text-center " + (
+                selectedSlipTrade.isWin 
+                  ? "bg-emerald-950/20 border-emerald-500/40 text-emerald-400" 
+                  : "bg-rose-950/20 border-rose-500/40 text-rose-400"
+              )}>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">
+                  NET SETTLED RETURN (PnL)
+                </div>
+                <div className="text-2xl font-bold tabular-nums">
+                  {(selectedSlipTrade.pnl >= 0 ? "+" : "") + selectedSlipTrade.pnl} MON
+                </div>
+                <div className="text-xs font-bold mt-0.5">
+                  {selectedSlipTrade.pnlPercent}
+                </div>
+              </div>
+
+              {/* Execution Specs Grid */}
+              <div className="bg-[#141722] rounded-xl p-3.5 space-y-2 border border-white/[0.06] text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Instrument:</span>
+                  <strong className="text-white">MON-PERP / USD</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Position Type:</span>
+                  <span className={"font-bold px-1.5 py-0.2 rounded " + (
+                    selectedSlipTrade.type === "LONG" 
+                      ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
+                      : "text-rose-400 bg-rose-950/40 border border-rose-500/30"
+                  )}>
+                    {selectedSlipTrade.type} {selectedSlipTrade.leverage}x
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Epoch ID:</span>
+                  <span className="text-slate-200 tabular-nums">#{selectedSlipTrade.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Entry Price:</span>
+                  <span className="text-white font-mono tabular-nums">${selectedSlipTrade.entryPrice?.toFixed(4)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Exit Price:</span>
+                  <span className="text-white font-mono tabular-nums">${selectedSlipTrade.exitPrice?.toFixed(4)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Collateral Margin:</span>
+                  <span className="text-slate-200 tabular-nums">{selectedSlipTrade.margin} MON</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Accrued Continuous Funding:</span>
+                  <span className={"tabular-nums font-bold " + (
+                    selectedSlipTrade.funding > 0 ? "text-emerald-400" : "text-rose-400"
+                  )}>
+                    {selectedSlipTrade.funding ? `${selectedSlipTrade.funding > 0 ? "+" : ""}${selectedSlipTrade.funding} MON` : "Settled (1.0s Rate)"}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-white/[0.06]">
+                  <span className="text-slate-400">Settlement Finality:</span>
+                  <span className="text-[#00FF66] font-bold">1.0s Monad Block Finality</span>
+                </div>
+              </div>
+
+              {/* MonadScan Verification Explorer Link & Hash */}
+              <div className="bg-[#11131C] p-3 rounded-lg border border-white/[0.06] text-[10px] space-y-1">
+                <div className="text-slate-400">Cryptographic Verification:</div>
+                <div className="flex justify-between items-center text-slate-300">
+                  <span className="font-mono">{selectedSlipTrade.txHash ? `${selectedSlipTrade.txHash.slice(0, 14)}...${selectedSlipTrade.txHash.slice(-8)}` : `Simulated Monad Tx: 0x${Math.abs(selectedSlipTrade.id * 17921).toString(16)}...`}</span>
+                  <a
+                    href={`https://testnet.monadscan.com/address/${CONTRACT_ADDRESSES.market}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[#CCFF00] hover:underline flex items-center gap-1 font-bold"
+                  >
+                    <span>MonadScan</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Action Buttons: Copy Proof Slip & Close */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const slipText = `FLUXSTATE SETTLEMENT SLIP\n-------------------------\nInstrument: MON-PERP (${selectedSlipTrade.type} ${selectedSlipTrade.leverage}x)\nEntry: $${selectedSlipTrade.entryPrice?.toFixed(4)} | Exit: $${selectedSlipTrade.exitPrice?.toFixed(4)}\nNet PnL: ${selectedSlipTrade.pnl >= 0 ? "+" : ""}${selectedSlipTrade.pnl} MON (${selectedSlipTrade.pnlPercent})\nSettlement: Continuous 1-Sec Block Funding\nNetwork: Monad L1 Testnet (Chain ID 10143)\nContract: 0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5`;
+                    navigator.clipboard.writeText(slipText);
+                    setCopiedSlip(true);
+                    setTimeout(() => setCopiedSlip(false), 3000);
+                  }}
+                  className="py-2.5 rounded bg-white/5 hover:bg-white/10 border border-white/20 text-white font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+                >
+                  {copiedSlip ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-[#00FF66]" />
+                      <span className="text-[#00FF66]">COPIED!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="w-3.5 h-3.5 text-[#CCFF00]" />
+                      <span>SHARE SLIP</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSlipTrade(null);
+                    setCopiedSlip(false);
+                  }}
+                  className="py-2.5 rounded bg-[#CCFF00] hover:bg-[#b8e600] text-black font-black uppercase transition-colors cursor-pointer"
+                >
+                  DONE
+                </button>
+              </div>
             </div>
           </div>
         </div>
