@@ -45,10 +45,10 @@ Legacy perps (dYdX, GMX) recalculate funding only once every **1 to 8 hours** du
 
 ### 4. High-Frequency Trading Cockpit & Hotkeys
 - **Zero-Latency Scalping Shortcuts**:
-  - `[B]`: Instant BUY / LONG
-  - `[S]`: Instant SELL / SHORT
-  - `[C]`: Close Position & Settle PnL
-  - `[1]`: Toggle 1-Click Session Keys
+  - `B`: Instant BUY / LONG
+  - `S`: Instant SELL / SHORT
+  - `C`: Close Position & Settle PnL
+  - `1`: Toggle 1-Click Session Keys
 - **Margin Presets**: Instant 25%, 50%, 75%, and MAX collateral sizing pills with stepper controls.
 
 ### 5. 1-Click Session Keys (EIP-712 Zero-Popup Trading)
@@ -59,8 +59,8 @@ Legacy perps (dYdX, GMX) recalculate funding only once every **1 to 8 hours** du
 - **Zero-Withdrawal Guarantee**: Cryptographically restricted to trading calls only (`FluxMarket.openPosition` / `closePosition`); zero ability to transfer or withdraw underlying collateral.
 
 ### 6. Sandbox Volatility Stress Tester & Public Keeper Sentinel
-- **Risk Edge-Case Simulator**: Shift Pyth oracle prices by $\pm 40\%$ via an interactive slider without risking real MON.
-- **Real-Time Margin Health Bar**: Color-coded liquidation indicator (Green $\to$ Amber $\to$ Red) with one-click Keeper Liquidation settlement.
+- **Risk Edge-Case Simulator**: Shift Pyth oracle prices by ±40% via an interactive slider without risking real MON.
+- **Real-Time Margin Health Bar**: Color-coded liquidation indicator (Green -> Amber -> Red) with one-click Keeper Liquidation settlement.
 - **Public Decentralized Keeper Fallback**: Allows any user or judge to trigger `checkpointFundingRate()` on-chain directly from the UI, ensuring censorship resistance if the primary autonomous sentinel experiences delay.
 - **Live On-Chain Monad Shard Reader**: Directly queries `shards(i)` on Monad Testnet via `publicClient.readContract`, verifying real-time EVM storage slot partitioning.
 

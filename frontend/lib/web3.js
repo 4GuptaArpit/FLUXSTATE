@@ -35,9 +35,7 @@ export const CONTRACT_ADDRESSES = {
   market: process.env.NEXT_PUBLIC_MARKET_ADDRESS || "0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5",
   oracle: process.env.NEXT_PUBLIC_ORACLE_ADDRESS || "0xc547C6f06495690cEd525EDd8Eaf4C17484b0C39",
   markets: {
-    "MON/USD": process.env.NEXT_PUBLIC_MARKET_MON || "0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5",
-    "ETH/USD": process.env.NEXT_PUBLIC_MARKET_ETH || "0x786e11A957677c8A17F08Db2cA75C7ABDA127E6C",
-    "BTC/USD": process.env.NEXT_PUBLIC_MARKET_BTC || "0xaaeE42E6988C5A90Fe3Cd3FE91d23efC15e7Fe17"
+    "MON/USD": process.env.NEXT_PUBLIC_MARKET_MON || "0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5"
   }
 };
 
@@ -100,8 +98,8 @@ export const FLUX_MARKET_ABI = [
     inputs: [],
     name: "aggregateTotalOI",
     outputs: [
-      { internalType: "uint256", name: "totalLongOI", type: "uint256" },
-      { internalType: "uint256", name: "totalShortOI", type: "uint256" }
+      { internalType: "uint256", name: "totalLongs", type: "uint256" },
+      { internalType: "uint256", name: "totalShorts", type: "uint256" }
     ],
     stateMutability: "view",
     type: "function"

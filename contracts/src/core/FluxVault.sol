@@ -77,14 +77,17 @@ contract FluxVault is Ownable {
 
         if (underwaterLoss > 0) {
             uint256 badDebt = uint256(underwaterLoss);
+            uint256 insuranceUsed = 0;
             if (insuranceReserve >= badDebt) {
                 insuranceReserve -= badDebt;
+                insuranceUsed = badDebt;
             } else {
+                insuranceUsed = insuranceReserve;
                 uint256 remainingBadDebt = badDebt - insuranceReserve;
                 insuranceReserve = 0;
                 poolReserves = poolReserves >= remainingBadDebt ? poolReserves - remainingBadDebt : 0;
             }
-            emit BadDebtAbsorbed(badDebt, insuranceReserve);
+            emit BadDebtAbsorbed(badDebt, insuranceUsed);
         } else {
             uint256 surplus = originalMargin > keeperBounty ? originalMargin - keeperBounty : 0;
             poolReserves += surplus;

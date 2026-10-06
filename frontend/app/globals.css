@@ -1,15 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --bg-canvas: #08090C;
-  --bg-surface: #0E1015;
-  --bg-surface-elevated: #14171F;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.15);
+  --bg-canvas: #050608;
+  --bg-chassis: #0B0D12;
+  --bg-surface: #0E1117;
+  --bg-surface-elevated: #151922;
+  --bg-inset: #07090C;
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-hairline: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
   --signal-lime: #CCFF00;
-  --signal-phosphor: #00FF66;
-  --trade-emerald: #00FF66;
-  --trade-crimson: #FF3344;
+  --signal-emerald: #00F279;
+  --signal-crimson: #FF2A4D;
+  --signal-cyan: #00E5FF;
+  --signal-amber: #FFB800;
 }
 
 body {
@@ -17,7 +21,6 @@ body {
   color: #ECEEF2;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   overflow-x: hidden;
-  /* Prevent accidental text highlight across the app like a native desktop terminal */
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
@@ -28,10 +31,10 @@ body {
 /* Crisp Tabular & Monospace Figures */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
-/* Allow selection specifically for text inputs and table records that traders copy */
+/* Selection control */
 input, textarea, [contenteditable="true"], .selectable {
   -webkit-user-select: text;
   -moz-user-select: text;
@@ -39,7 +42,7 @@ input, textarea, [contenteditable="true"], .selectable {
   user-select: text;
 }
 
-/* Hide native browser up/down number spin arrows */
+/* Hide native number spin buttons */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -50,57 +53,62 @@ input[type="number"] {
   appearance: textfield;
 }
 
-/* Industrial Brutalist Solid Panels (Zero roundness/gradients) */
-.glass-panel {
-  background: #0E1015;
+/* Double-Bezel Hardware Architecture */
+.monolith-chassis {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%), #0A0C11;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-.glass-panel-glow {
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.7);
+.monolith-core {
+  background: #06080B;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
-/* High-Voltage Signal Accents */
-.signal-lime-border {
-  border-color: #CCFF00;
+.monolith-plate {
+  background: linear-gradient(180deg, rgba(22, 26, 36, 0.95) 0%, rgba(14, 17, 24, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.signal-lime-text {
-  color: #CCFF00;
-}
-
-.signal-lime-bg {
-  background-color: #CCFF00;
-  color: #000000;
-}
-
-/* Precision Hairline Technical Grid */
-.cyber-grid {
-  background-size: 24px 24px;
+/* Precision Sub-Pixel Tactical Grid */
+.subpixel-grid {
+  background-size: 32px 32px;
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
 }
 
-/* Industrial CRT Scanline Overlay Effect (Tactical Telemetry) */
-.crt-scanlines {
-  background-image: repeating-linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.15) 0px,
-    rgba(0, 0, 0, 0.15) 1px,
-    transparent 1px,
-    transparent 2px
-  );
-  pointer-events: none;
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #060709;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
-/* Hairline Blueprint Rules */
-.hairline-border {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* High-Voltage Glow Accents */
+.glow-lime {
+  box-shadow: 0 0 24px -2px rgba(204, 255, 0, 0.25);
 }
 
-/* ASCII Framing Helper */
-.ascii-bracket {
-  letter-spacing: 0.08em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+.glow-emerald {
+  box-shadow: 0 0 24px -2px rgba(0, 242, 121, 0.25);
+}
+
+.glow-crimson {
+  box-shadow: 0 0 24px -2px rgba(255, 42, 77, 0.25);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 24px -2px rgba(0, 229, 255, 0.25);
 }
