@@ -51,6 +51,13 @@ import {
 import { formatEther, parseEther } from "viem";
 import { ShardMonitor } from "../components/ShardMonitor";
 
+// Universal crypto balance formatter: strictly floors to specified decimals to prevent rounding up past actual funds
+const formatBalance = (val, decimals = 4) => {
+  if (val == null || isNaN(val)) return "0." + "0".repeat(decimals);
+  const factor = Math.pow(10, decimals);
+  return (Math.floor(val * factor) / factor).toFixed(decimals);
+};
+
 export default function FluxGamingTerminal() {
   const [monPrice, setMonPrice] = useState(4.285);
   const [priceHistory, setPriceHistory] = useState(() => Array.from({ length: 24 }, (_, i) => +(4.270 + Math.sin(i / 3) * 0.015 + (i * 0.0006)).toFixed(4)));
@@ -949,7 +956,7 @@ export default function FluxGamingTerminal() {
       alert("You already have an active position! Close it first before opening a new one.");
       return;
     }
-    if (userBalance < marginNum) {
+    if ((userBalance + 0.0001) < marginNum) {
       alert("Insufficient balance! You need at least " + marginNum + " MON.");
       return;
     }
@@ -1108,13 +1115,24 @@ export default function FluxGamingTerminal() {
           : "Onchain settlement failed or reverted. Position remains safely open.");
         return;
       }
-    } else {
-      // Sandbox mode: direct balance update
-      updateTradingBalance(+(userBalance + finalReturn).toFixed(2));
     }
 
-    const calculatedBal = +(userBalance + finalReturn).toFixed(4);
-    const resolvedBalanceAfter = freshOnchainBal !== null ? freshOnchainBal : calculatedBal;
+    // Compute true pre-trade baseline balance
+    const preTradeBalance = activePosition.balanceBefore != null
+      ? activePosition.balanceBefore
+      : (freshOnchainBal !== null 
+          ? +(freshOnchainBal - finalReturn + activePosition.margin).toFixed(4)
+          : +(userBalance + activePosition.margin).toFixed(4));
+
+    // In Sandbox mode, accurately credit user's balance
+    if (isPilotMode) {
+      const sandboxFinalBal = +(preTradeBalance + pnl).toFixed(4);
+      updateTradingBalance(Math.max(0, sandboxFinalBal));
+    }
+
+    const resolvedBalanceAfter = freshOnchainBal !== null 
+      ? freshOnchainBal 
+      : +(preTradeBalance + pnl).toFixed(4);
 
     const historyEntry = {
       id: activePosition.epochId,
@@ -1130,8 +1148,8 @@ export default function FluxGamingTerminal() {
       pnl: +pnl.toFixed(2),
       pnlPercent: (pnl >= 0 ? "+" : "") + currentPositionPnL.pnlPercent.toFixed(1) + "%",
       isWin: pnl >= 0,
-      balanceBefore: activePosition.balanceBefore ? +activePosition.balanceBefore.toFixed(4) : null,
-      balanceAfter: resolvedBalanceAfter,
+      balanceBefore: +preTradeBalance.toFixed(4),
+      balanceAfter: +resolvedBalanceAfter.toFixed(4),
       fee: activePosition.fee ? +activePosition.fee.toFixed(4) : +(activePosition.margin * activePosition.leverage * 0.0008).toFixed(4),
       gasFee: "< 0.002",
       time: "Just now"
@@ -1247,8 +1265,8 @@ export default function FluxGamingTerminal() {
           </div>
         </div>
 
-        {/* Live Monad Telemetry HUD Badges */}
-        <div className="hidden 2xl:flex items-center space-x-2 text-xs font-mono">
+        {/* Live Monad Telemetry HUD Badges (Visible on Ultra-Wide screens only) */}
+        <div className="hidden 3xl:flex items-center space-x-2 text-xs font-mono">
           <div className="monolith-core px-2.5 py-1 rounded-md flex items-center space-x-2">
             <Percent className="w-3 h-3 text-[#00F279]" />
             <span className="text-zinc-400 text-[10px] font-bold">FUNDING:</span>
@@ -1278,12 +1296,12 @@ export default function FluxGamingTerminal() {
         </div>
 
         {/* User Balance & Wallet Action */}
-        <div className="flex items-center space-x-2 sm:space-x-2.5 shrink-0">
+        <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
           {/* 1-Click Session Badge */}
           {walletAddress && is1ClickTrading && activeSession && (
             <div 
               onClick={handleToggle1Click}
-              className={"hidden lg:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border font-mono text-xs cursor-pointer select-none transition-all shrink-0 font-bold " + (
+              className={"hidden 2xl:flex items-center space-x-1.5 px-2 py-1.5 rounded-lg border font-mono text-xs cursor-pointer select-none transition-all shrink-0 font-bold " + (
                 activeSession.isLocked 
                   ? "bg-[#FFB800]/10 border-[#FFB800]/40 text-[#FFB800]"
                   : "bg-[#00E5FF]/10 border-[#00E5FF]/40 text-[#00E5FF]"
@@ -1291,12 +1309,12 @@ export default function FluxGamingTerminal() {
               title={activeSession.isLocked ? "Session locked due to inactivity. Click to unlock." : "1-Click Active. Click to manage or revoke."}
             >
               {activeSession.isLocked ? (
-                <Lock className="w-3.5 h-3.5 text-[#FFB800] animate-pulse" />
+                <Lock className="w-3 h-3 text-[#FFB800] animate-pulse" />
               ) : (
-                <Zap className="w-3.5 h-3.5 text-[#00E5FF] animate-pulse" />
+                <Zap className="w-3 h-3 text-[#00E5FF] animate-pulse" />
               )}
-              <span>{activeSession.isLocked ? "LOCKED" : "1-CLICK"}</span>
-              <span className="text-[9px] text-zinc-400 bg-black/40 px-1 py-0.5 rounded font-mono">
+              <span className="text-[11px]">{activeSession.isLocked ? "LOCKED" : "1-CLICK"}</span>
+              <span className="text-[8.5px] text-zinc-400 bg-black/40 px-1 py-0.5 rounded font-mono">
                 {activeSession.storageType === "local" ? "24H" : "TAB"}
               </span>
             </div>
@@ -1307,7 +1325,6 @@ export default function FluxGamingTerminal() {
             type="button"
             onClick={() => {
               if (walletAddress) {
-                // If connected, allow toggling back to Judge Pilot Sandbox mode without disconnecting
                 handleDisconnectWallet();
                 setTxToast({
                   title: "ACTIVATED JUDGE PILOT SANDBOX",
@@ -1321,7 +1338,7 @@ export default function FluxGamingTerminal() {
                 handleConnectWallet();
               }
             }}
-            className={"hidden xl:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border font-mono text-xs select-none shrink-0 font-bold cursor-pointer transition-all active:scale-95 " + (
+            className={"hidden 2xl:flex items-center space-x-1.5 px-2 py-1.5 rounded-lg border font-mono text-xs select-none shrink-0 font-bold cursor-pointer transition-all active:scale-95 " + (
               walletAddress
                 ? "bg-[#00F279]/10 border-[#00F279]/40 text-[#00F279] hover:bg-[#00F279]/20"
                 : "bg-[#FFB800]/10 border-[#FFB800]/40 text-[#FFB800] hover:bg-[#FFB800]/20"
@@ -1330,7 +1347,7 @@ export default function FluxGamingTerminal() {
           >
             <span className={"w-2 h-2 rounded-full " + (walletAddress ? "bg-[#00F279] animate-ping" : "bg-[#FFB800] animate-pulse")} />
             <span className="tracking-wider text-[10px]">
-              {walletAddress ? "TESTNET (10143)" : "⚡ JUDGE PILOT (1,000 MON)"}
+              {walletAddress ? "TESTNET (10143)" : "⚡ JUDGE PILOT"}
             </span>
           </button>
 
@@ -1338,7 +1355,7 @@ export default function FluxGamingTerminal() {
           <div className="hidden sm:flex items-center space-x-1.5 monolith-core px-3 py-1.5 rounded-lg font-mono shrink-0">
             <span className="text-[10px] text-zinc-400 font-bold hidden md:inline">BAL:</span>
             <span className="text-xs sm:text-sm font-black text-white tabular-nums">
-              {userBalance.toFixed(3)} MON
+              {formatBalance(userBalance, 4)} MON
             </span>
             {isPilotMode && (
               <button
@@ -1440,7 +1457,7 @@ export default function FluxGamingTerminal() {
                 <div className="flex justify-between items-center px-1 text-zinc-300">
                   <span className="text-zinc-400 text-[11px]">Wallet Balance:</span>
                   <div className="flex items-center space-x-2">
-                    <span className="text-white font-black text-sm tabular-nums">{userBalance.toFixed(5)} MON</span>
+                    <span className="text-white font-black text-sm tabular-nums">{formatBalance(userBalance, 4)} MON</span>
                     <button
                       onClick={() => fetchRealBalance(walletAddress)}
                       title="Sync with Monad RPC"
@@ -1578,7 +1595,7 @@ export default function FluxGamingTerminal() {
             </div>
 
             {/* Real-Time Sparkline / Spectrum */}
-            <div className="mt-5 h-44 w-full rounded-xl monolith-core p-4 flex flex-col justify-between relative overflow-hidden">
+            <div className="mt-4 h-32 w-full rounded-xl monolith-core p-3 flex flex-col justify-between relative overflow-hidden">
               {/* Clean Non-Overlapping Sub-Header */}
               <div className="flex items-center justify-between w-full z-10 font-mono text-[11px] mb-2">
                 <div className="flex items-center space-x-2 text-zinc-300">
@@ -1690,8 +1707,8 @@ export default function FluxGamingTerminal() {
 
           {/* Real-Time Active Position HUD or Awaiting Order Standby Sentinel */}
           {activePosition ? (
-            <div className="bg-[#0E1015] rounded-xl p-5 border border-white/20 relative overflow-hidden font-mono">
-              <div className="flex flex-wrap justify-between items-center pb-4 border-b border-white/[0.08] gap-3">
+            <div className="bg-[#0E1015] rounded-xl p-3.5 border border-white/20 relative overflow-hidden font-mono">
+              <div className="flex flex-wrap justify-between items-center pb-2.5 border-b border-white/[0.08] gap-2">
                 <div className="flex items-center space-x-3">
                   <span className={"px-2.5 py-1 rounded text-xs font-mono font-black " + (
                     activePosition.isLong 
@@ -1978,7 +1995,7 @@ export default function FluxGamingTerminal() {
               <div className="mt-4 monolith-core p-3.5 rounded-xl">
                 <div className="flex justify-between text-[11px] font-mono text-zinc-400 mb-2">
                   <span className="font-bold uppercase tracking-wider text-[10px]">MARGIN COLLATERAL</span>
-                  <span className="text-[#00E5FF] font-black tabular-nums">BALANCE: {userBalance.toFixed(4)} MON</span>
+                  <span className="text-[#00E5FF] font-black tabular-nums">BALANCE: {formatBalance(userBalance, 4)} MON</span>
                 </div>
                 <div className="relative flex items-center">
                   <input
@@ -2032,7 +2049,24 @@ export default function FluxGamingTerminal() {
                       key={label}
                       type="button"
                       onClick={() => {
-                        const calculated = Math.max(0.1, +(userBalance * pct).toFixed(2));
+                        if (userBalance <= 0) {
+                          setMargin("0.1");
+                          return;
+                        }
+                        let calculated;
+                        if (pct === 1.00) {
+                          // For MAX: In testnet reserve a safe gas buffer (0.05 MON) so user always has gas to settle/close payouts;
+                          // In sandbox or testnet, strictly FLOOR down so it never exceeds userBalance!
+                          const maxAvailable = isPilotMode 
+                            ? userBalance 
+                            : Math.max(0.01, userBalance - 0.05);
+                          // Floor down to 2 decimal places to avoid floating point overshoot
+                          calculated = Math.max(0.01, Math.floor(maxAvailable * 100) / 100);
+                        } else {
+                          // For percentage sizing on testnet, leave proportional gas headroom
+                          const base = isPilotMode ? userBalance : Math.max(0, userBalance - 0.03);
+                          calculated = Math.max(0.1, Math.floor(base * pct * 100) / 100);
+                        }
                         setMargin(calculated.toString());
                       }}
                       className="py-1.5 rounded-lg bg-white/[0.04] hover:bg-[#CCFF00]/10 border border-white/[0.08] hover:border-[#CCFF00]/50 text-zinc-300 hover:text-white font-bold transition-all text-center active:scale-95 cursor-pointer"
@@ -2075,45 +2109,76 @@ export default function FluxGamingTerminal() {
                 </div>
               </div>
 
-              {/* Primary Instant Order Dispatch Buttons (Tactile Double-Bezel Hardware Triggers) */}
+              {/* Primary Instant Order Dispatch Buttons or Direct Close Trigger */}
               <div className="mt-4 space-y-2.5">
-                <button
-                  disabled={isSubmitting || marginNum <= 0 || Boolean(activePosition)}
-                  onClick={() => handleOpenPosition(true)}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00D96C] to-[#00F279] hover:brightness-110 font-mono font-black text-sm text-black flex items-center justify-between px-5 active:scale-[0.98] transition-all disabled:opacity-40 cursor-pointer shadow-[0_8px_20px_-4px_rgba(0,242,121,0.4)] group"
-                >
-                  <div className="flex items-center space-x-2.5">
-                    <div className="w-6 h-6 rounded-md bg-black/20 flex items-center justify-center">
-                      <TrendingUp className="w-3.5 h-3.5 text-black" />
-                    </div>
-                    <span>BUY / LONG {leverage}x</span>
-                    <kbd className="text-[10px] bg-black text-[#00F279] px-2 py-0.5 rounded font-mono font-black shadow-inner">
-                      B
-                    </kbd>
+                {activePosition ? (
+                  /* Immediate Cockpit Close & Settle Button (ZERO SCROLL NEEDED) */
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleClosePosition}
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-[#FF2A4D] hover:brightness-110 font-mono font-black text-sm text-white flex items-center justify-between px-5 active:scale-[0.98] transition-all disabled:opacity-40 cursor-pointer shadow-[0_8px_24px_-4px_rgba(255,42,77,0.5)] group border border-rose-400/30"
+                      title="Instantly close active position and settle PnL to wallet [Hotkey: C]"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-6 h-6 rounded-md bg-black/30 flex items-center justify-center">
+                          <XCircle className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="tracking-wide">CLOSE & SETTLE PAYOUT</span>
+                        <kbd className="text-[10px] bg-black text-rose-300 px-2 py-0.5 rounded font-mono font-black shadow-inner border border-rose-400/30">
+                          C
+                        </kbd>
+                      </div>
+                      <span className="text-[10px] font-mono bg-black/30 px-2.5 py-1 rounded-md font-black tabular-nums border border-white/10">
+                        {currentPositionPnL.isProfit ? "+" : ""}{currentPositionPnL.pnlMon.toFixed(2)} MON
+                      </span>
+                    </button>
+                    <p className="text-[10px] font-mono text-zinc-400 text-center">
+                      Position Active: <strong className={activePosition.isLong ? "text-[#00F279]" : "text-[#FF2A4D]"}>{activePosition.isLong ? "LONG" : "SHORT"} {activePosition.leverage}x</strong> • Click above or press <kbd className="text-zinc-300 font-bold">C</kbd> to exit.
+                    </p>
                   </div>
-                  <span className="text-[10px] font-mono bg-black/20 px-2.5 py-1 rounded-md font-black tabular-nums border border-black/10">
-                    1.0s MONAD TX
-                  </span>
-                </button>
+                ) : (
+                  <>
+                    <button
+                      disabled={isSubmitting || marginNum <= 0}
+                      onClick={() => handleOpenPosition(true)}
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00D96C] to-[#00F279] hover:brightness-110 font-mono font-black text-sm text-black flex items-center justify-between px-5 active:scale-[0.98] transition-all disabled:opacity-40 cursor-pointer shadow-[0_8px_20px_-4px_rgba(0,242,121,0.4)] group"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-6 h-6 rounded-md bg-black/20 flex items-center justify-center">
+                          <TrendingUp className="w-3.5 h-3.5 text-black" />
+                        </div>
+                        <span>BUY / LONG {leverage}x</span>
+                        <kbd className="text-[10px] bg-black text-[#00F279] px-2 py-0.5 rounded font-mono font-black shadow-inner">
+                          B
+                        </kbd>
+                      </div>
+                      <span className="text-[10px] font-mono bg-black/20 px-2.5 py-1 rounded-md font-black tabular-nums border border-black/10">
+                        1.0s MONAD TX
+                      </span>
+                    </button>
 
-                <button
-                  disabled={isSubmitting || marginNum <= 0 || Boolean(activePosition)}
-                  onClick={() => handleOpenPosition(false)}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#E6193C] to-[#FF2A4D] hover:brightness-110 font-mono font-black text-sm text-white flex items-center justify-between px-5 active:scale-[0.98] transition-all disabled:opacity-40 cursor-pointer shadow-[0_8px_20px_-4px_rgba(255,42,77,0.4)] group"
-                >
-                  <div className="flex items-center space-x-2.5">
-                    <div className="w-6 h-6 rounded-md bg-black/30 flex items-center justify-center">
-                      <TrendingDown className="w-3.5 h-3.5 text-white" />
-                    </div>
-                    <span>SELL / SHORT {leverage}x</span>
-                    <kbd className="text-[10px] bg-black text-[#FF2A4D] px-2 py-0.5 rounded font-mono font-black shadow-inner">
-                      S
-                    </kbd>
-                  </div>
-                  <span className="text-[10px] font-mono bg-black/30 px-2.5 py-1 rounded-md font-black tabular-nums border border-white/10">
-                    1.0s MONAD TX
-                  </span>
-                </button>
+                    <button
+                      disabled={isSubmitting || marginNum <= 0}
+                      onClick={() => handleOpenPosition(false)}
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#E6193C] to-[#FF2A4D] hover:brightness-110 font-mono font-black text-sm text-white flex items-center justify-between px-5 active:scale-[0.98] transition-all disabled:opacity-40 cursor-pointer shadow-[0_8px_20px_-4px_rgba(255,42,77,0.4)] group"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-6 h-6 rounded-md bg-black/30 flex items-center justify-center">
+                          <TrendingDown className="w-3.5 h-3.5 text-white" />
+                        </div>
+                        <span>SELL / SHORT {leverage}x</span>
+                        <kbd className="text-[10px] bg-black text-[#FF2A4D] px-2 py-0.5 rounded font-mono font-black shadow-inner">
+                          S
+                        </kbd>
+                      </div>
+                      <span className="text-[10px] font-mono bg-black/30 px-2.5 py-1 rounded-md font-black tabular-nums border border-white/10">
+                        1.0s MONAD TX
+                      </span>
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* Smart Bracket Controls (TP / SL Guard) */}
@@ -2686,7 +2751,7 @@ export default function FluxGamingTerminal() {
                           </div>
                           {trade.balanceBefore != null && trade.balanceAfter != null && (
                             <div className="text-[10px] text-slate-500 mt-0.5 tabular-nums">
-                              Bal: <span>{(+trade.balanceBefore).toFixed(3)}</span> ➔ <span className="text-slate-300 font-bold">{(+trade.balanceAfter).toFixed(3)} MON</span>
+                              Bal: <span>{formatBalance(+trade.balanceBefore, 4)}</span> ➔ <span className="text-slate-300 font-bold">{formatBalance(+trade.balanceAfter, 4)} MON</span>
                             </div>
                           )}
                         </td>
@@ -2709,64 +2774,68 @@ export default function FluxGamingTerminal() {
         </section>
       </main>
 
-      {/* Institutional Cryptographic Transaction & State Pipeline Toast (Elevated Signal Monolith) */}
+      {/* Institutional Cryptographic Transaction & State Pipeline Toast (High-Contrast Floating Notification Capsule) */}
       {txToast && (
-        <div className="fixed bottom-6 right-6 max-w-md w-full bg-[#060709] border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.95)] z-[9999] font-mono select-none rounded-lg overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-200">
+        <div className="fixed bottom-6 right-6 max-w-md w-[calc(100vw-2rem)] sm:w-full bg-[#10131B]/95 backdrop-blur-2xl border-2 border-[#836EF9]/60 shadow-[0_25px_70px_rgba(0,0,0,0.95),0_0_30px_rgba(131,110,249,0.25)] z-[9999] font-mono select-none rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200 ring-1 ring-white/20">
           {/* High-Voltage Signal Top Keyline Strip */}
-          <div className={"h-1 w-full " + (
-            txToast.isWin ? "bg-gradient-to-r from-[#00FF66] to-[#CCFF00]" : "bg-gradient-to-r from-rose-500 to-amber-500"
+          <div className={"h-1.5 w-full " + (
+            txToast.isWin ? "bg-gradient-to-r from-[#00FF66] via-[#CCFF00] to-[#00E5FF]" : "bg-gradient-to-r from-rose-500 via-amber-500 to-rose-600"
           )} />
           
-          <div className="p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+          <div className="p-4 sm:p-5 space-y-3 bg-gradient-to-b from-white/[0.04] to-transparent">
+            <div className="flex items-center justify-between border-b border-white/15 pb-2.5">
               <div className="flex items-center space-x-2">
-                <span className={"w-2 h-2 rounded-full " + (txToast.isWin ? "bg-[#00FF66] animate-ping" : "bg-rose-500 animate-pulse")} />
-                <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold flex items-center gap-1.5">
-                  <span>EXECUTION PIPELINE</span>
-                  <span className="text-zinc-600">•</span>
-                  <span className="text-[#CCFF00] text-[9px]">MONAD CONSENSUS</span>
+                <span className={"w-2.5 h-2.5 rounded-full shadow-md " + (
+                  txToast.isWin ? "bg-[#00FF66] shadow-[0_0_8px_#00FF66] animate-pulse" : "bg-rose-500 shadow-[0_0_8px_#F43F5E] animate-pulse"
+                )} />
+                <span className="text-[10px] uppercase tracking-widest text-zinc-300 font-black flex items-center gap-1.5">
+                  <span className="text-white">TRANSACTION DISPATCH</span>
+                  <span className="text-zinc-500">•</span>
+                  <span className="text-[#CCFF00] text-[9.5px] bg-[#CCFF00]/10 px-1.5 py-0.2 rounded border border-[#CCFF00]/30 font-bold">MONAD 10143</span>
                 </span>
               </div>
-              <div className="flex items-center space-x-1.5">
-                <span className={"text-[9px] font-bold px-1.5 py-0.5 rounded border tracking-wider " + (
+              <div className="flex items-center space-x-2">
+                <span className={"text-[10px] font-black px-2 py-0.5 rounded-md border tracking-wider shadow-sm " + (
                   txToast.isWin 
-                    ? "text-[#00FF66] bg-[#00FF66]/10 border-[#00FF66]/30" 
-                    : "text-rose-400 bg-rose-950/40 border-rose-500/30"
+                    ? "text-[#00FF66] bg-[#00FF66]/20 border-[#00FF66]/50" 
+                    : "text-rose-400 bg-rose-950/60 border-rose-500/50"
                 )}>
                   {txToast.type || "VERIFIED"}
                 </span>
                 <button 
                   onClick={() => setTxToast(null)}
-                  className="text-zinc-500 hover:text-zinc-300 p-0.5 rounded hover:bg-white/10 transition-colors"
+                  className="text-zinc-400 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer"
                   title="Dismiss Notification"
                 >
-                  <XCircle className="w-3.5 h-3.5" />
+                  <XCircle className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            <div className="flex items-start space-x-3.5">
-              <div className={"w-9 h-9 rounded-md border flex items-center justify-center shrink-0 shadow-inner " + (
+            <div className="flex items-start space-x-3.5 pt-0.5">
+              <div className={"w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 shadow-lg " + (
                 txToast.isWin 
-                  ? "bg-[#00FF66]/15 border-[#00FF66]/40 text-[#00FF66]" 
-                  : "bg-rose-950/50 border-rose-500/40 text-rose-400"
+                  ? "bg-[#00FF66]/20 border-[#00FF66]/50 text-[#00FF66]" 
+                  : "bg-rose-950/70 border-rose-500/50 text-rose-400"
               )}>
-                <CheckCircle2 className="w-4 h-4" />
+                <CheckCircle2 className="w-5 h-5" />
               </div>
 
               <div className="flex-1 min-w-0 space-y-1">
-                <div className="text-xs font-bold text-zinc-100 tracking-wide uppercase truncate">
+                <div className="text-sm font-black text-white tracking-wide uppercase truncate">
                   {txToast.title}
                 </div>
-                <div className="text-[11px] text-[#CCFF00] font-bold tabular-nums">
+                <div className="text-xs text-[#CCFF00] font-black tabular-nums">
                   {txToast.amount}
                 </div>
-                <div className="text-[10px] text-zinc-400 flex items-center justify-between pt-1 border-t border-white/[0.08]">
-                  <span className="flex items-center gap-1 truncate">
-                    <span className="text-[#00FF66]">✓</span>
-                    <span className="truncate">{txToast.detail}</span>
+                <div className="text-[11px] text-zinc-300 flex items-center justify-between pt-1.5 border-t border-white/10">
+                  <span className="flex items-center gap-1.5 truncate">
+                    <span className="text-[#00FF66] font-black">✓</span>
+                    <span className="truncate text-zinc-300 font-medium">{txToast.detail}</span>
                   </span>
-                  <span className="text-[9px] text-zinc-500 uppercase shrink-0">1.0s MONAD TX</span>
+                  <span className="text-[9.5px] text-[#00E5FF] font-black uppercase shrink-0 bg-[#00E5FF]/10 px-1.5 py-0.5 rounded border border-[#00E5FF]/20 ml-2">
+                    1.0s MONAD TX
+                  </span>
                 </div>
               </div>
             </div>
