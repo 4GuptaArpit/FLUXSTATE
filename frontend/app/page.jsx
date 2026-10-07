@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -71,6 +71,7 @@ export default function FluxGamingTerminal() {
   const [isTerminalLocked, setIsTerminalLocked] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const accountDropdownRef = useRef(null);
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [sessionStorageType, setSessionStorageType] = useState("local"); // 'local' | 'session'
   const [sessionPinInput, setSessionPinInput] = useState("");
@@ -620,6 +621,18 @@ export default function FluxGamingTerminal() {
       setUserBalance(1000.0);
     }
   }, []);
+
+  // Close account dropdown when clicking anywhere outside
+  useEffect(() => {
+    if (!showAccountDropdown) return;
+    const handleClickOutside = (e) => {
+      if (accountDropdownRef.current && !accountDropdownRef.current.contains(e.target)) {
+        setShowAccountDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showAccountDropdown]);
 
   // Load and hydrate active session key and onchain position whenever walletAddress is connected
   useEffect(() => {
@@ -1215,16 +1228,16 @@ export default function FluxGamingTerminal() {
       <header className="w-full px-3 sm:px-6 py-2.5 flex items-center justify-between border-b border-white/[0.08] bg-[#07090D]/90 backdrop-blur-xl sticky top-0 z-50">
         <div className="flex items-center space-x-3.5 shrink-0">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/10 border border-[#CCFF00]/30 flex items-center justify-center">
-              <Crosshair className="w-4 h-4 text-[#CCFF00]" />
+            <div className="w-8 h-8 rounded-lg bg-[#836EF9]/15 border border-[#836EF9]/40 flex items-center justify-center shadow-[0_0_12px_rgba(131,110,249,0.25)]">
+              <Crosshair className="w-4 h-4 text-[#836EF9]" />
             </div>
             <div className="flex items-center space-x-2">
               <span className="font-mono font-black text-lg tracking-tight uppercase text-white">
                 FLUXSTATE
               </span>
-              <span className="inline-flex items-center gap-1.5 text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-md bg-white/5 text-zinc-300 border border-white/10 whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00F279] animate-pulse" />
-                MONAD L1
+              <span className="inline-flex items-center gap-1.5 text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-md bg-[#836EF9]/10 text-[#836EF9] border border-[#836EF9]/30 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#836EF9] animate-pulse" />
+                MONAD METROPOLIS
               </span>
             </div>
           </div>
@@ -1289,20 +1302,37 @@ export default function FluxGamingTerminal() {
             </div>
           )}
 
-          {/* Environment Status Badge */}
-          <div 
-            className={"hidden xl:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border font-mono text-xs select-none shrink-0 font-bold " + (
+          {/* Environment Status Badge & Instant Judge Pilot Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              if (walletAddress) {
+                // If connected, allow toggling back to Judge Pilot Sandbox mode without disconnecting
+                handleDisconnectWallet();
+                setTxToast({
+                  title: "ACTIVATED JUDGE PILOT SANDBOX",
+                  amount: "1,000.00 MON Trial Balance",
+                  detail: "Instant zero-faucet judge mode active with zero MetaMask popups.",
+                  type: "OPEN",
+                  isWin: true
+                });
+                setTimeout(() => setTxToast(null), 4000);
+              } else {
+                handleConnectWallet();
+              }
+            }}
+            className={"hidden xl:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border font-mono text-xs select-none shrink-0 font-bold cursor-pointer transition-all active:scale-95 " + (
               walletAddress
-                ? "bg-[#00F279]/10 border-[#00F279]/40 text-[#00F279]"
-                : "bg-[#FFB800]/10 border-[#FFB800]/40 text-[#FFB800]"
+                ? "bg-[#00F279]/10 border-[#00F279]/40 text-[#00F279] hover:bg-[#00F279]/20"
+                : "bg-[#FFB800]/10 border-[#FFB800]/40 text-[#FFB800] hover:bg-[#FFB800]/20"
             )}
-            title={walletAddress ? "Connected to Monad Testnet with real wallet" : "Logged out demo mode with 1,000 virtual MON"}
+            title={walletAddress ? "Click to switch to Instant Judge Pilot Sandbox" : "Click to connect real Monad Testnet wallet"}
           >
             <span className={"w-2 h-2 rounded-full " + (walletAddress ? "bg-[#00F279] animate-ping" : "bg-[#FFB800] animate-pulse")} />
             <span className="tracking-wider text-[10px]">
-              {walletAddress ? "TESTNET" : "SANDBOX"}
+              {walletAddress ? "TESTNET (10143)" : "⚡ JUDGE PILOT (1,000 MON)"}
             </span>
-          </div>
+          </button>
 
           {/* Balance Pill with Instant Refill for Sandbox */}
           <div className="hidden sm:flex items-center space-x-1.5 monolith-core px-3 py-1.5 rounded-lg font-mono shrink-0">
@@ -1325,7 +1355,7 @@ export default function FluxGamingTerminal() {
                   setTimeout(() => setTxToast(null), 3000);
                 }}
                 title="Reset Sandbox Balance to 1,000 MON"
-                className="ml-1 text-[9px] bg-[#CCFF00]/10 hover:bg-[#CCFF00]/20 border border-[#CCFF00]/40 text-[#CCFF00] px-1.5 py-0.5 rounded font-black transition-all active:scale-95 cursor-pointer"
+                className="ml-1 text-[9px] bg-[#836EF9]/10 hover:bg-[#836EF9]/20 border border-[#836EF9]/40 text-[#836EF9] px-1.5 py-0.5 rounded font-black transition-all active:scale-95 cursor-pointer"
               >
                 REFILL
               </button>
@@ -1335,15 +1365,15 @@ export default function FluxGamingTerminal() {
           {/* Quick Guide & Terminal Features Button */}
           <button
             onClick={() => setShowGuideModal(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-black border border-white/10 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white transition-all active:scale-95 shrink-0 cursor-pointer"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-black border border-white/10 bg-white/5 hover:bg-[#836EF9]/10 hover:border-[#836EF9]/30 text-zinc-300 hover:text-white transition-all active:scale-95 shrink-0 cursor-pointer"
             title="Terminal Guide & Feature Highlights"
           >
-            <HelpCircle className="w-3.5 h-3.5 text-[#CCFF00]" />
+            <HelpCircle className="w-3.5 h-3.5 text-[#836EF9]" />
             <span className="hidden sm:inline">DOCS</span>
           </button>
 
           {/* Wallet Connect / Account Dropdown */}
-          <div className="relative shrink-0 flex items-center gap-1.5">
+          <div ref={accountDropdownRef} className="relative shrink-0 flex items-center gap-1.5">
             {walletAddress && (
               <button
                 onClick={() => {
@@ -1373,34 +1403,34 @@ export default function FluxGamingTerminal() {
               }}
               className={"group relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-mono text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer " + (
                 walletAddress 
-                  ? "bg-[#141720] border border-white/15 text-white hover:border-[#CCFF00]/60"
-                  : "bg-[#CCFF00] text-black font-black hover:bg-[#b8e600] active:scale-95 shadow-[0_0_15px_rgba(204,255,0,0.3)]"
+                  ? "bg-[#141720] border border-white/15 text-white hover:border-[#836EF9]/60"
+                  : "bg-[#836EF9] text-white font-black hover:bg-[#725cf7] active:scale-95 shadow-[0_0_15px_rgba(131,110,249,0.35)]"
               )}
             >
-              <Wallet className={"w-3.5 h-3.5 shrink-0 " + (walletAddress ? "text-[#CCFF00]" : "text-black")} />
+              <Wallet className={"w-3.5 h-3.5 shrink-0 " + (walletAddress ? "text-[#836EF9]" : "text-white")} />
               <span className="truncate">{walletAddress ? (walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4)) : "CONNECT"}</span>
               {walletAddress && <ChevronDown className="w-3 h-3 text-zinc-400 group-hover:text-white transition-transform shrink-0" />}
             </button>
 
             {/* Account Menu Dropdown */}
             {walletAddress && showAccountDropdown && (
-              <div className="absolute right-0 mt-2 w-72 monolith-chassis rounded-xl p-3.5 shadow-2xl z-[100] font-mono text-xs space-y-3">
+              <div className="absolute right-0 top-full mt-2 w-80 bg-[#0B0D14] border border-white/20 rounded-xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-[100] font-mono text-xs space-y-3 animate-in fade-in zoom-in-95 duration-100">
                 <div className="flex items-center justify-between pb-2.5 border-b border-white/10">
-                  <span className="text-zinc-400 text-[10px] font-bold">CONNECTED ACCOUNT</span>
+                  <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Connected Account</span>
                   <span className="text-[10px] text-[#00F279] bg-[#00F279]/10 px-2 py-0.5 rounded border border-[#00F279]/30 font-bold">
-                    MONAD TESTNET
+                    MONAD TESTNET (10143)
                   </span>
                 </div>
 
                 {/* Address with Copy Button */}
-                <div className="monolith-core p-2.5 rounded-lg flex items-center justify-between">
-                  <div className="truncate text-zinc-200 font-bold mr-2 text-[11px] tabular-nums">
-                    {walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
+                <div className="bg-[#05060A] border border-white/10 p-2.5 rounded-lg flex items-center justify-between">
+                  <div className="truncate text-white font-bold mr-2 text-[11px] tabular-nums">
+                    {walletAddress}
                   </div>
                   <button
                     onClick={handleCopyAddress}
                     title="Copy full address to clipboard"
-                    className="p-1.5 rounded bg-white/5 hover:bg-white/15 text-zinc-300 transition-colors cursor-pointer"
+                    className="p-1.5 rounded bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white transition-colors cursor-pointer shrink-0"
                   >
                     {copiedAddress ? <CheckCircle2 className="w-3.5 h-3.5 text-[#00F279]" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
@@ -1410,33 +1440,33 @@ export default function FluxGamingTerminal() {
                 <div className="flex justify-between items-center px-1 text-zinc-300">
                   <span className="text-zinc-400 text-[11px]">Wallet Balance:</span>
                   <div className="flex items-center space-x-2">
-                    <span className="text-white font-black tabular-nums">{userBalance.toFixed(5)} MON</span>
+                    <span className="text-white font-black text-sm tabular-nums">{userBalance.toFixed(5)} MON</span>
                     <button
                       onClick={() => fetchRealBalance(walletAddress)}
                       title="Sync with Monad RPC"
-                      className="p-1 rounded bg-white/5 hover:bg-white/15 text-[#CCFF00] transition-colors"
+                      className="p-1.5 rounded bg-white/5 hover:bg-[#836EF9]/15 text-[#836EF9] transition-colors cursor-pointer"
                     >
-                      <RefreshCw className="w-3 h-3 hover:rotate-180 transition-transform duration-500" />
+                      <RefreshCw className="w-3.5 h-3.5 hover:rotate-180 transition-transform duration-500" />
                     </button>
                   </div>
                 </div>
 
-                {/* Monad Explorer Link */}
+                {/* MonadScan Explorer Link */}
                 <a
-                  href={`https://testnet.monadexplorer.com/address/${walletAddress}`}
+                  href={`https://testnet.monadscan.com/address/${walletAddress}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white transition-colors"
+                  className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-white/5 hover:bg-[#836EF9]/10 border border-white/5 hover:border-[#836EF9]/30 text-zinc-300 hover:text-white transition-colors cursor-pointer"
                 >
-                  <span className="text-[11px]">View on MonadExplorer</span>
-                  <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+                  <span className="text-[11px] font-bold">View on MonadScan</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-[#836EF9]" />
                 </a>
 
                 {/* Log Out / Disconnect Button */}
                 <div className="pt-2 border-t border-white/10">
                   <button
                     onClick={handleDisconnectWallet}
-                    className="w-full py-2.5 rounded-lg bg-rose-950/40 hover:bg-rose-950/60 border border-rose-500/30 text-rose-300 font-bold flex items-center justify-center space-x-2 transition-all active:scale-95 cursor-pointer"
+                    className="w-full py-2.5 rounded-lg bg-rose-950/40 hover:bg-rose-950/60 border border-rose-500/40 text-rose-300 font-bold flex items-center justify-center space-x-2 transition-all active:scale-95 cursor-pointer"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>DISCONNECT WALLET</span>
