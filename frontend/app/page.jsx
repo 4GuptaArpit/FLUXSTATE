@@ -2128,13 +2128,36 @@ export default function FluxGamingTerminal() {
                   <button
                     type="button"
                     onClick={() => setIsBracketEnabled(!isBracketEnabled)}
-                    className={"px-2.5 py-1 rounded-md text-[10px] font-black border transition-all cursor-pointer " + (
+                    role="switch"
+                    aria-checked={isBracketEnabled}
+                    className={"group flex items-center gap-2 px-2 py-1 rounded-lg border font-mono text-[10px] font-bold tracking-wider transition-all cursor-pointer select-none active:scale-95 " + (
                       isBracketEnabled 
-                        ? "bg-[#CCFF00] border-[#CCFF00] text-black shadow-sm" 
-                        : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+                        ? "bg-[#CCFF00]/10 border-[#CCFF00]/40 text-[#CCFF00] hover:border-[#CCFF00]/70 hover:bg-[#CCFF00]/15" 
+                        : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-zinc-200 hover:border-white/20"
                     )}
+                    title={isBracketEnabled ? "Click to disarm Smart Bracket" : "Click to arm Take Profit / Stop Loss bracket guard"}
                   >
-                    {isBracketEnabled ? "ARMED" : "OFF"}
+                    <span className="flex items-center gap-1.5">
+                      <span className={"w-1.5 h-1.5 rounded-full transition-colors " + (
+                        isBracketEnabled ? "bg-[#CCFF00] shadow-[0_0_6px_#CCFF00] animate-pulse" : "bg-zinc-600"
+                      )} />
+                      <span className="text-[9.5px] uppercase font-black">
+                        {isBracketEnabled ? "ARMED" : "OFF"}
+                      </span>
+                    </span>
+
+                    {/* Tactile Hardware Toggle Switch Pill */}
+                    <div 
+                      className={"w-7 h-4 rounded-full p-0.5 transition-colors flex items-center " + (
+                        isBracketEnabled ? "bg-[#CCFF00]" : "bg-zinc-700/80 group-hover:bg-zinc-600"
+                      )}
+                    >
+                      <div 
+                        className={"w-3 h-3 rounded-full bg-black shadow-sm transition-transform duration-200 ease-out " + (
+                          isBracketEnabled ? "translate-x-3" : "translate-x-0"
+                        )} 
+                      />
+                    </div>
                   </button>
                 </div>
 
@@ -3293,15 +3316,65 @@ export default function FluxGamingTerminal() {
                 </p>
               </div>
 
-              {/* Shared Foundation Feature: Public Decentralized Keeper Fallback */}
-              <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                <div className="flex items-center space-x-2 text-zinc-300 font-bold text-[11px]">
-                  <Zap className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>Decentralized Keeper Dispatch & Multicall</span>
+              {/* Verified On-Chain Deployments Table */}
+              <div className="bg-[#08090C] p-3.5 rounded border border-[#836EF9]/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-[#836EF9] font-bold text-[11px]">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#836EF9]" />
+                    <span>Verified Smart Contracts • Monad Testnet (10143)</span>
+                  </div>
+                  <span className="text-[9px] bg-[#836EF9]/15 text-[#836EF9] px-1.5 py-0.5 rounded border border-[#836EF9]/30 font-bold">MONADSCAN VERIFIED</span>
                 </div>
-                <p className="text-zinc-400 leading-relaxed text-[11px]">
-                  Guaranteed censorship resistance: Open the Keeper Sentinel drawer to inspect verified MonadScan transactions, or trigger <strong className="text-zinc-200">checkpointFundingRate()</strong> onchain directly from your connected wallet.
-                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] pt-1">
+                  <a 
+                    href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="p-2 rounded bg-white/[0.02] border border-white/10 hover:border-[#836EF9]/60 hover:bg-[#836EF9]/10 transition-colors flex justify-between items-center group"
+                  >
+                    <div>
+                      <div className="text-zinc-300 font-bold">FluxMarket (16 Shards)</div>
+                      <div className="text-zinc-500 font-mono text-[9px]">0xD822...DcC5</div>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-zinc-500 group-hover:text-[#836EF9]" />
+                  </a>
+                  <a 
+                    href="https://testnet.monadscan.com/address/0x5047f8d761dcE6edf7b2171b123e0A758056d914" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="p-2 rounded bg-white/[0.02] border border-white/10 hover:border-[#836EF9]/60 hover:bg-[#836EF9]/10 transition-colors flex justify-between items-center group"
+                  >
+                    <div>
+                      <div className="text-zinc-300 font-bold">FluxVault (LP & Insurance)</div>
+                      <div className="text-zinc-500 font-mono text-[9px]">0x5047...d914</div>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-zinc-500 group-hover:text-[#836EF9]" />
+                  </a>
+                  <a 
+                    href="https://testnet.monadscan.com/address/0xBF76d0d245fED0C1279c6719cBe27635805533B2" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="p-2 rounded bg-white/[0.02] border border-white/10 hover:border-[#836EF9]/60 hover:bg-[#836EF9]/10 transition-colors flex justify-between items-center group"
+                  >
+                    <div>
+                      <div className="text-zinc-300 font-bold">FluxFundingEngine</div>
+                      <div className="text-zinc-500 font-mono text-[9px]">0xBF76...33B2</div>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-zinc-500 group-hover:text-[#836EF9]" />
+                  </a>
+                  <a 
+                    href="https://testnet.monadscan.com/address/0xc547C6f06495690cEd525EDd8Eaf4C17484b0C39" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="p-2 rounded bg-white/[0.02] border border-white/10 hover:border-[#836EF9]/60 hover:bg-[#836EF9]/10 transition-colors flex justify-between items-center group"
+                  >
+                    <div>
+                      <div className="text-zinc-300 font-bold">Pyth Oracle Hermes</div>
+                      <div className="text-zinc-500 font-mono text-[9px]">0xc547...0C39</div>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-zinc-500 group-hover:text-[#836EF9]" />
+                  </a>
+                </div>
               </div>
 
             </div>
