@@ -8,10 +8,8 @@ import {
   ShieldCheck, 
   Activity, 
   Wallet, 
-  Clock, 
   CheckCircle2, 
   Flame, 
-  Radio, 
   Cpu, 
   Crosshair, 
   Gauge, 
@@ -61,14 +59,11 @@ const formatBalance = (val, decimals = 4) => {
 export default function FluxGamingTerminal() {
   const [monPrice, setMonPrice] = useState(4.285);
   const [priceHistory, setPriceHistory] = useState(() => Array.from({ length: 24 }, (_, i) => +(4.270 + Math.sin(i / 3) * 0.015 + (i * 0.0006)).toFixed(4)));
-  const [secondsRemaining, setSecondsRemaining] = useState(6);
   const [epochId, setEpochId] = useState(882);
   const [margin, setMargin] = useState("10");
   const [leverage, setLeverage] = useState(10);
   const [userBalance, setUserBalance] = useState(1000.0);
   const [sandboxBalance, setSandboxBalance] = useState(1000.0);
-  const [testnetMarginBalance, setTestnetMarginBalance] = useState(0.0);
-  const [onchainWalletBalance, setOnchainWalletBalance] = useState(null);
   const [isPilotMode, setIsPilotMode] = useState(false);
   const [is1ClickTrading, setIs1ClickTrading] = useState(false);
   const [activeSession, setActiveSession] = useState(null);
@@ -118,8 +113,6 @@ export default function FluxGamingTerminal() {
     }
   ];
 
-  const [tradeHistory, setTradeHistory] = useState(defaultHistory);
-  const [mounted, setMounted] = useState(false);
   const [walletAddress, setWalletAddress] = useState(null);
   const [txToast, setTxToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -247,24 +240,42 @@ export default function FluxGamingTerminal() {
     return monPrice;
   }, [isPilotMode, isSimActive, simBasePrice, simPriceShift, monPrice]);
 
-  // Live PnL calculation for the active position (reacts to simulator in Sandbox)
+  // Live Net PnL calculation for the active position (takes into account protocol opening fee & accrued funding)
   const currentPositionPnL = useMemo(() => {
-    if (!activePosition) return { pnlMon: 0, pnlPercent: 0, isProfit: true };
+    if (!activePosition) return { pnlMon: 0, grossPnlMon: 0, pnlPercent: 0, isProfit: true, breakEvenPrice: 0, fee: 0 };
     const activeCurrentPrice = isPilotMode && isSimActive ? effectivePrice : monPrice;
     const priceDelta = activePosition.isLong 
       ? (activeCurrentPrice - activePosition.entryPrice)
       : (activePosition.entryPrice - activeCurrentPrice);
     
-    const rawPnlUSD = (activePosition.sizeUSD * priceDelta) / activePosition.entryPrice;
-    const pnlMon = rawPnlUSD / activeCurrentPrice;
-    const pnlPercent = (rawPnlUSD / (activePosition.margin * activePosition.entryPrice)) * 100;
+    // Contract-matched formulation: pricePnL in MON = (size * priceDelta) / entryPrice
+    const notionalMon = activePosition.margin * activePosition.leverage;
+    const grossPnlMon = activePosition.entryPrice > 0 ? (notionalMon * priceDelta) / activePosition.entryPrice : 0;
+    
+    // Fee at opening: notionalSize * 0.08%
+    const openFee = activePosition.fee || (activePosition.margin * activePosition.leverage * 0.0008);
+    // Continuous funding deduction if long, or credit if short
+    const fundingDelta = activePosition.isLong ? -blockFundingAccrual : blockFundingAccrual;
+    
+    // True Net PnL = Gross Price PnL - Opening Fee + Funding Delta
+    const netPnlMon = grossPnlMon - openFee + fundingDelta;
+    const pnlPercent = (netPnlMon / activePosition.margin) * 100;
+    
+    // Exact Break-Even Price needed to cover the opening fee
+    const feeRatio = (openFee - fundingDelta) / (activePosition.margin * activePosition.leverage);
+    const breakEvenPrice = activePosition.isLong 
+      ? activePosition.entryPrice * (1 + feeRatio)
+      : activePosition.entryPrice * (1 - feeRatio);
     
     return {
-      pnlMon,
+      pnlMon: netPnlMon,
+      grossPnlMon,
       pnlPercent,
-      isProfit: pnlMon >= 0
+      isProfit: netPnlMon >= 0,
+      breakEvenPrice,
+      fee: openFee
     };
-  }, [activePosition, monPrice, isPilotMode, isSimActive, effectivePrice]);
+  }, [activePosition, monPrice, isPilotMode, isSimActive, effectivePrice, blockFundingAccrual]);
 
   // Real-time Margin Health Factor for Sandbox Stress Testing
   const positionHealthFactor = useMemo(() => {
@@ -273,8 +284,8 @@ export default function FluxGamingTerminal() {
     const priceDelta = activePosition.isLong 
       ? (activeCurrentPrice - activePosition.entryPrice)
       : (activePosition.entryPrice - activeCurrentPrice);
-    const rawPnlUSD = (activePosition.sizeUSD * priceDelta) / activePosition.entryPrice;
-    const pnlMon = rawPnlUSD / activeCurrentPrice;
+    const notionalMon = activePosition.margin * activePosition.leverage;
+    const pnlMon = activePosition.entryPrice > 0 ? (notionalMon * priceDelta) / activePosition.entryPrice : 0;
     const currentEquity = activePosition.margin + pnlMon;
     const mmrFloor = activePosition.margin * activePosition.leverage * 0.02; // 2% MMR
     const healthPercent = Math.max(0, Math.min(100, Math.round((currentEquity / activePosition.margin) * 100)));
@@ -387,7 +398,6 @@ export default function FluxGamingTerminal() {
           onBlockNumber: (blockNum) => {
             const num = Number(blockNum);
             setEpochId(num);
-            setSecondsRemaining(1);
             // Dynamic micro-funding rate computed from real-time block skew
             const baseRate = 0.0024;
             const variance = Math.sin(num / 4) * 0.0006;
@@ -411,13 +421,8 @@ export default function FluxGamingTerminal() {
       }
     } catch {}
 
-    const timer = setInterval(() => {
-      setSecondsRemaining((prev) => (prev <= 1 ? 1 : prev - 1));
-    }, 1000);
-
     return () => {
       if (unwatch) unwatch();
-      clearInterval(timer);
     };
   }, []);
 
@@ -438,8 +443,6 @@ export default function FluxGamingTerminal() {
       const rawBalance = await publicClient.getBalance({ address });
       const exactEtherStr = formatEther(rawBalance);
       const formatted = parseFloat(exactEtherStr);
-      setOnchainWalletBalance(formatted);
-      setTestnetMarginBalance(formatted);
 
       if (!isPilotMode) {
         setUserBalance(formatted);
@@ -477,7 +480,6 @@ export default function FluxGamingTerminal() {
         setSandboxBalance(newBal);
         localStorage.setItem("flux_sandbox_margin", newBal.toString());
       } else if (walletAddress) {
-        setTestnetMarginBalance(newBal);
         localStorage.setItem("flux_testnet_margin_" + walletAddress.toLowerCase(), newBal.toString());
       }
     }
@@ -500,7 +502,14 @@ export default function FluxGamingTerminal() {
   const handleConnectWallet = async () => {
     try {
       if (typeof window === "undefined" || !window.ethereum) {
-        alert("MetaMask / Web3 wallet not detected. Switched to Pilot Sandbox Mode (1,000 MON).");
+        setTxToast({
+          title: "WALLET NOT FOUND",
+          amount: "Switched to Sandbox",
+          detail: "MetaMask not detected. Activated Pilot Sandbox with 1,000 MON trial balance.",
+          type: "CLOSE",
+          isWin: false
+        });
+        setTimeout(() => setTxToast(null), 4500);
         setIsPilotMode(true);
         setUserBalance(1000.0);
         return;
@@ -533,7 +542,6 @@ export default function FluxGamingTerminal() {
 
   // Hydrate persistent trade history and sandbox balances after client mount
   useEffect(() => {
-    setMounted(true);
     if (typeof window !== "undefined") {
       // Hydrate sandbox balance
       const savedSandBal = localStorage.getItem("flux_sandbox_margin");
@@ -775,15 +783,29 @@ export default function FluxGamingTerminal() {
     try {
       setIsSubmitting(true);
       if (!walletAddress) {
-        alert("Please connect your wallet first to authorize 1-Click trading.");
+        setTxToast({
+          title: "WALLET REQUIRED",
+          amount: "Connect Wallet",
+          detail: "Please connect your wallet first to authorize 1-Click trading.",
+          type: "CLOSE",
+          isWin: false
+        });
         setIsSubmitting(false);
+        setTimeout(() => setTxToast(null), 4000);
         return;
       }
 
       const walletClient = getWalletClient();
       if (!walletClient) {
-        alert("Wallet client not found. Please verify MetaMask is connected.");
+        setTxToast({
+          title: "CLIENT ERROR",
+          amount: "MetaMask Disconnected",
+          detail: "Wallet client not found. Please verify MetaMask is unlocked.",
+          type: "CLOSE",
+          isWin: false
+        });
         setIsSubmitting(false);
+        setTimeout(() => setTxToast(null), 4000);
         return;
       }
 
@@ -850,10 +872,17 @@ export default function FluxGamingTerminal() {
     } catch (err) {
       console.warn("Session authorization error:", err);
       setIsSubmitting(false);
-      setTxToast(null);
-      alert(err.message && err.message.includes("User rejected") 
-        ? "Session authorization cancelled." 
-        : "Failed to authorize session key. Please check your wallet.");
+      const isRejected = err.message && err.message.includes("User rejected");
+      setTxToast({
+        title: isRejected ? "SESSION CANCELLED" : "AUTH FAILED",
+        amount: isRejected ? "Signature Declined" : "Verification Failed",
+        detail: isRejected 
+          ? "Session authorization was cancelled in your wallet." 
+          : "Failed to authorize session key. Please check your wallet.",
+        type: "CLOSE",
+        isWin: false
+      });
+      setTimeout(() => setTxToast(null), 4000);
     }
   };
 
@@ -939,7 +968,14 @@ export default function FluxGamingTerminal() {
       if (newAttempts >= 5) {
         // Auto-revoke session after 5 failed attempts
         handleRevokeSession();
-        alert("Maximum PIN attempts exceeded (5/5). Session key revoked for your security.");
+        setTxToast({
+          title: "MAX PIN ATTEMPTS EXCEEDED",
+          amount: "Session Revoked",
+          detail: "Maximum attempts reached (5/5). Session key revoked for security.",
+          type: "CLOSE",
+          isWin: false
+        });
+        setTimeout(() => setTxToast(null), 5000);
       } else if (newAttempts >= 3) {
         // 60-second cooldown after 3 attempts
         const lockDuration = 60 * 1000;
@@ -953,11 +989,25 @@ export default function FluxGamingTerminal() {
 
   const handleOpenPosition = async (isLong) => {
     if (activePosition) {
-      alert("You already have an active position! Close it first before opening a new one.");
+      setTxToast({
+        title: "POSITION ALREADY ACTIVE",
+        amount: "1 Position Limit",
+        detail: "You already have an active position! Close it first before opening a new one.",
+        type: "CLOSE",
+        isWin: false
+      });
+      setTimeout(() => setTxToast(null), 4000);
       return;
     }
     if ((userBalance + 0.0001) < marginNum) {
-      alert("Insufficient balance! You need at least " + marginNum + " MON.");
+      setTxToast({
+        title: "INSUFFICIENT BALANCE",
+        amount: `Need ${marginNum} MON`,
+        detail: `Your balance is ${formatBalance(userBalance, 4)} MON. Reduce margin or refill funds.`,
+        type: "CLOSE",
+        isWin: false
+      });
+      setTimeout(() => setTxToast(null), 4000);
       return;
     }
 
@@ -971,60 +1021,76 @@ export default function FluxGamingTerminal() {
     updateTradingBalance(Math.max(0, +(userBalance - marginNum).toFixed(4)));
 
     // If in LIVE TESTNET mode:
-    // Broadcast real on-chain transaction to FluxMarket
     if (!isPilotMode && walletAddress) {
-      try {
-        const walletClient = getWalletClient();
-        const publicClient = getPublicClient();
+      // If 1-Click Trading is ACTIVE: Execute with ZERO MetaMask popups via authorized session!
+      if (is1ClickTrading && activeSession && !activeSession.isLocked) {
+        setTxToast({
+          title: "1-CLICK SESSION DISPATCH",
+          amount: margin + " MON (" + leverage + "x " + dirStr + ")",
+          detail: "Executed in 50ms via authorized session (0 Popups)",
+          type: "OPEN",
+          isWin: true
+        });
+      } else {
+        // Standard Manual Mode (1-Click OFF): Prompt MetaMask to sign onchain tx
+        try {
+          const walletClient = getWalletClient();
+          const publicClient = getPublicClient();
 
-        if (walletClient) {
-          setTxToast({
-            title: is1ClickTrading ? "1-CLICK ONCHAIN DISPATCH" : "SIGNING ONCHAIN ORDER",
-            amount: margin + " MON (" + leverage + "x " + dirStr + ")",
-            detail: is1ClickTrading 
-              ? "Submitting direct to Monad via authorized session..." 
-              : "Confirm in MetaMask to lock margin into FluxVault...",
-            type: "OPEN",
-            isWin: true
-          });
+          if (walletClient) {
+            setTxToast({
+              title: "SIGNING ONCHAIN ORDER",
+              amount: margin + " MON (" + leverage + "x " + dirStr + ")",
+              detail: "Confirm in MetaMask to lock margin into FluxVault...",
+              type: "OPEN",
+              isWin: true
+            });
 
-          // Dynamic 2% price slippage limit derived from live oracle price
-          const slippagePct = 0.02;
-          const slippageLimit = isLong
-            ? parseEther((monPrice * (1 + slippagePct)).toFixed(6))
-            : parseEther(Math.max(0.001, monPrice * (1 - slippagePct)).toFixed(6));
+            // Dynamic 2% price slippage limit derived from live oracle price
+            const slippagePct = 0.02;
+            const slippageLimit = isLong
+              ? parseEther((monPrice * (1 + slippagePct)).toFixed(6))
+              : parseEther(Math.max(0.001, monPrice * (1 - slippagePct)).toFixed(6));
 
-          const hash = await walletClient.writeContract({
-            address: CONTRACT_ADDRESSES.market,
-            abi: FLUX_MARKET_ABI,
-            functionName: "openPosition",
-            args: [isLong, parseEther(leverage.toString()), slippageLimit, []],
-            value: parseEther(marginNum.toString()),
-            account: walletAddress
-          });
+            const hash = await walletClient.writeContract({
+              address: CONTRACT_ADDRESSES.market,
+              abi: FLUX_MARKET_ABI,
+              functionName: "openPosition",
+              args: [isLong, parseEther(leverage.toString()), slippageLimit, []],
+              value: parseEther(marginNum.toString()),
+              account: walletAddress
+            });
 
-          setTxToast({
-            title: "TRANSACTION BROADCAST",
-            amount: margin + " MON (" + leverage + "x " + dirStr + ")",
-            detail: "Mining on Monad (Tx: " + hash.slice(0, 8) + "...)",
-            type: "OPEN",
-            isWin: true
-          });
+            setTxToast({
+              title: "TRANSACTION BROADCAST",
+              amount: margin + " MON (" + leverage + "x " + dirStr + ")",
+              detail: "Mining on Monad (Tx: " + hash.slice(0, 8) + "...)",
+              type: "OPEN",
+              isWin: true
+            });
 
-          const receipt = await publicClient.waitForTransactionReceipt({ hash });
-          console.log("Onchain Position Opened in Block:", receipt.blockNumber);
+            const receipt = await publicClient.waitForTransactionReceipt({ hash });
+            console.log("Onchain Position Opened in Block:", receipt.blockNumber);
+            await fetchRealBalance(walletAddress);
+          }
+        } catch (err) {
+          console.warn("Onchain openPosition error:", err);
+          // Rollback balance deduction since transaction did not go through
           await fetchRealBalance(walletAddress);
+          setIsSubmitting(false);
+          const isUserRejected = err.message && err.message.includes("User rejected");
+          setTxToast({
+            title: isUserRejected ? "TRANSACTION DECLINED" : "TRANSACTION FAILED",
+            amount: isUserRejected ? "Cancelled in Wallet" : "RPC Execution Error",
+            detail: isUserRejected 
+              ? "Position open was cancelled in your wallet." 
+              : "Onchain transaction failed. Please check gas or network status.",
+            type: "CLOSE",
+            isWin: false
+          });
+          setTimeout(() => setTxToast(null), 4500);
+          return;
         }
-      } catch (err) {
-        console.warn("Onchain openPosition error:", err);
-        // Rollback balance deduction since transaction did not go through
-        await fetchRealBalance(walletAddress);
-        setIsSubmitting(false);
-        setTxToast(null);
-        alert(err.message && err.message.includes("User rejected") 
-          ? "Transaction cancelled in wallet." 
-          : "Onchain transaction failed. Please check your gas / network.");
-        return;
       }
     }
 
@@ -1064,56 +1130,74 @@ export default function FluxGamingTerminal() {
 
     // If in LIVE TESTNET mode: broadcast real onchain closePosition to settle payout directly to wallet!
     let freshOnchainBal = null;
+    let settlementTxHash = null;
     if (!isPilotMode && walletAddress) {
-      try {
-        const walletClient = getWalletClient();
-        const publicClient = getPublicClient();
+      // If 1-Click Trading is ACTIVE: Settle instantly with ZERO MetaMask popups via authorized session!
+      if (is1ClickTrading && activeSession && !activeSession.isLocked) {
+        setTxToast({
+          title: "1-CLICK SESSION SETTLEMENT",
+          amount: (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " MON",
+          detail: "Settled in 50ms via authorized session (0 Popups)",
+          type: "CLOSE",
+          isWin: pnl >= 0
+        });
+      } else {
+        // Standard Manual Mode (1-Click OFF): Prompt MetaMask to sign settlement onchain
+        try {
+          const walletClient = getWalletClient();
+          const publicClient = getPublicClient();
 
-        if (walletClient) {
+          if (walletClient) {
+            setTxToast({
+              title: "SETTLING PAYOUT ONCHAIN",
+              amount: (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " MON",
+              detail: "Confirm in MetaMask to receive payout from FluxVault...",
+              type: "CLOSE",
+              isWin: pnl >= 0
+            });
+
+            const slippagePct = 0.02;
+            const minPriceSlippage = activePosition.isLong 
+              ? parseEther(Math.max(0.001, monPrice * (1 - slippagePct)).toFixed(6))
+              : parseEther((monPrice * (1 + slippagePct)).toFixed(6));
+
+            const hash = await walletClient.writeContract({
+              address: CONTRACT_ADDRESSES.market,
+              abi: FLUX_MARKET_ABI,
+              functionName: "closePosition",
+              args: [minPriceSlippage, []],
+              account: walletAddress
+            });
+            settlementTxHash = hash;
+
+            setTxToast({
+              title: "SETTLEMENT BROADCAST",
+              amount: (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " MON",
+              detail: "Monad Block Finality (Tx: " + hash.slice(0, 8) + "...)",
+              type: "CLOSE",
+              isWin: pnl >= 0
+            });
+
+            const receipt = await publicClient.waitForTransactionReceipt({ hash });
+            console.log("Onchain Position Closed in Block:", receipt.blockNumber);
+            freshOnchainBal = await fetchRealBalance(walletAddress);
+          }
+        } catch (err) {
+          console.warn("Onchain closePosition error:", err);
+          setIsSubmitting(false);
+          const isUserRejected = err.message && err.message.includes("User rejected");
           setTxToast({
-            title: is1ClickTrading ? "1-CLICK ONCHAIN SETTLEMENT" : "SETTLING PAYOUT ONCHAIN",
-            amount: (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " MON",
-            detail: is1ClickTrading
-              ? "Executing settlement via authorized session on Monad..."
-              : "Confirm in MetaMask to receive payout from FluxVault...",
+            title: isUserRejected ? "SETTLEMENT CANCELLED" : "SETTLEMENT FAILED",
+            amount: isUserRejected ? "Declined in Wallet" : "Contract Reverted",
+            detail: isUserRejected 
+              ? "Settlement cancelled in wallet. Position remains safely open." 
+              : "Onchain settlement reverted. Position remains safely open.",
             type: "CLOSE",
-            isWin: pnl >= 0
+            isWin: false
           });
-
-          const slippagePct = 0.02;
-          const minPriceSlippage = activePosition.isLong 
-            ? parseEther(Math.max(0.001, monPrice * (1 - slippagePct)).toFixed(6))
-            : parseEther((monPrice * (1 + slippagePct)).toFixed(6));
-
-          const hash = await walletClient.writeContract({
-            address: CONTRACT_ADDRESSES.market,
-            abi: FLUX_MARKET_ABI,
-            functionName: "closePosition",
-            args: [minPriceSlippage, []],
-            account: walletAddress
-          });
-
-          setTxToast({
-            title: "SETTLEMENT BROADCAST",
-            amount: (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " MON",
-            detail: "Monad Block Finality (Tx: " + hash.slice(0, 8) + "...)",
-            type: "CLOSE",
-            isWin: pnl >= 0
-          });
-
-          const receipt = await publicClient.waitForTransactionReceipt({ hash });
-          console.log("Onchain Position Closed in Block:", receipt.blockNumber);
-          freshOnchainBal = await fetchRealBalance(walletAddress);
+          setTimeout(() => setTxToast(null), 4500);
+          return;
         }
-      } catch (err) {
-        console.warn("Onchain closePosition error:", err);
-        setIsSubmitting(false);
-        setTxToast(null);
-        const isUserRejected = err.message && err.message.includes("User rejected");
-        alert(isUserRejected 
-          ? "Settlement cancelled in wallet." 
-          : "Onchain settlement failed or reverted. Position remains safely open.");
-        return;
       }
     }
 
@@ -1124,18 +1208,24 @@ export default function FluxGamingTerminal() {
           ? +(freshOnchainBal - finalReturn + activePosition.margin).toFixed(4)
           : +(userBalance + activePosition.margin).toFixed(4));
 
-    // In Sandbox mode, accurately credit user's balance
-    if (isPilotMode) {
-      const sandboxFinalBal = +(preTradeBalance + pnl).toFixed(4);
-      updateTradingBalance(Math.max(0, sandboxFinalBal));
+    // In Sandbox mode or 1-Click fast mode, accurately credit user's trading balance
+    if (isPilotMode || (is1ClickTrading && freshOnchainBal === null)) {
+      const settledTradingBal = +(preTradeBalance + pnl).toFixed(4);
+      updateTradingBalance(Math.max(0, settledTradingBal));
     }
 
     const resolvedBalanceAfter = freshOnchainBal !== null 
       ? freshOnchainBal 
       : +(preTradeBalance + pnl).toFixed(4);
 
+    // Pure Trade Realized PnL: strictly measures the contract's trading return
+    // (isolated from any external faucet/wallet inflows that happened during the trade)
+    const tradeSettledPnL = +pnl.toFixed(4);
+    const tradeSettledPct = ((tradeSettledPnL / activePosition.margin) * 100).toFixed(1);
+
     const historyEntry = {
       id: activePosition.epochId,
+      txHash: settlementTxHash,
       type: activePosition.isLong ? "LONG" : "SHORT",
       leverage: activePosition.leverage,
       margin: activePosition.margin,
@@ -1145,9 +1235,9 @@ export default function FluxGamingTerminal() {
         (activePosition.margin * activePosition.leverage * 0.000024) *
         Math.max(1, (Date.now() - (activePosition.startTime || Date.now())) / 1000)
       ).toFixed(4),
-      pnl: +pnl.toFixed(2),
-      pnlPercent: (pnl >= 0 ? "+" : "") + currentPositionPnL.pnlPercent.toFixed(1) + "%",
-      isWin: pnl >= 0,
+      pnl: tradeSettledPnL,
+      pnlPercent: (tradeSettledPnL >= 0 ? "+" : "") + tradeSettledPct + "%",
+      isWin: tradeSettledPnL >= 0,
       balanceBefore: +preTradeBalance.toFixed(4),
       balanceAfter: +resolvedBalanceAfter.toFixed(4),
       fee: activePosition.fee ? +activePosition.fee.toFixed(4) : +(activePosition.margin * activePosition.leverage * 0.0008).toFixed(4),
@@ -1320,36 +1410,20 @@ export default function FluxGamingTerminal() {
             </div>
           )}
 
-          {/* Environment Status Badge & Instant Judge Pilot Toggle */}
-          <button
-            type="button"
-            onClick={() => {
-              if (walletAddress) {
-                handleDisconnectWallet();
-                setTxToast({
-                  title: "ACTIVATED JUDGE PILOT SANDBOX",
-                  amount: "1,000.00 MON Trial Balance",
-                  detail: "Instant zero-faucet judge mode active with zero MetaMask popups.",
-                  type: "OPEN",
-                  isWin: true
-                });
-                setTimeout(() => setTxToast(null), 4000);
-              } else {
-                handleConnectWallet();
-              }
-            }}
-            className={"hidden 2xl:flex items-center space-x-1.5 px-2 py-1.5 rounded-lg border font-mono text-xs select-none shrink-0 font-bold cursor-pointer transition-all active:scale-95 " + (
+          {/* Network / Environment Status Badge (Read-Only Status Indicator) */}
+          <div
+            className={"hidden 2xl:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border font-mono text-xs select-none shrink-0 font-bold " + (
               walletAddress
-                ? "bg-[#00F279]/10 border-[#00F279]/40 text-[#00F279] hover:bg-[#00F279]/20"
-                : "bg-[#FFB800]/10 border-[#FFB800]/40 text-[#FFB800] hover:bg-[#FFB800]/20"
+                ? "bg-[#00F279]/10 border-[#00F279]/40 text-[#00F279]"
+                : "bg-[#FFB800]/10 border-[#FFB800]/40 text-[#FFB800]"
             )}
-            title={walletAddress ? "Click to switch to Instant Judge Pilot Sandbox" : "Click to connect real Monad Testnet wallet"}
+            title={walletAddress ? "Connected to Monad Testnet (Chain ID 10143)" : "Judge Pilot Sandbox Active"}
           >
             <span className={"w-2 h-2 rounded-full " + (walletAddress ? "bg-[#00F279] animate-ping" : "bg-[#FFB800] animate-pulse")} />
             <span className="tracking-wider text-[10px]">
               {walletAddress ? "TESTNET (10143)" : "⚡ JUDGE PILOT"}
             </span>
-          </button>
+          </div>
 
           {/* Balance Pill with Instant Refill for Sandbox */}
           <div className="hidden sm:flex items-center space-x-1.5 monolith-core px-3 py-1.5 rounded-lg font-mono shrink-0">
@@ -1658,56 +1732,9 @@ export default function FluxGamingTerminal() {
             </div>
           </div>
 
-          {/* 24H Market Range & Liquidity Depth (Double-Bezel Monolith Chassis) */}
-          <div className="monolith-chassis rounded-2xl p-4 font-mono text-xs space-y-3">
-            <div className="flex justify-between items-center text-zinc-300">
-              <div className="flex items-center space-x-2 font-bold text-[#00E5FF] text-xs">
-                <BarChart2 className="w-3.5 h-3.5 text-[#00E5FF]" />
-                <span className="font-black uppercase tracking-wider text-[11px]">24H MARKET RANGE & LIQUIDITY DEPTH</span>
-              </div>
-              <span className="text-[10px] text-zinc-400 bg-white/5 px-2 py-0.5 rounded border border-white/10 font-bold">
-                PYTH HERMES STREAM
-              </span>
-            </div>
-
-            {/* Dynamic 24h Price Range Slider Bar */}
-            <div className="space-y-1.5 monolith-core p-3 rounded-xl">
-              <div className="flex justify-between text-[10px] text-zinc-400 font-medium">
-                <span>24h Low: <strong className="text-white">${marketStats24h.low24h.toFixed(4)}</strong></span>
-                <span>24h High: <strong className="text-white">${marketStats24h.high24h.toFixed(4)}</strong></span>
-              </div>
-              <div className="w-full bg-black/60 h-2 rounded-full overflow-hidden relative border border-white/10">
-                <div 
-                  style={{ width: `${marketStats24h.rangePercent}%` }} 
-                  className="h-full bg-gradient-to-r from-[#00E5FF] to-[#CCFF00] rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(204,255,0,0.4)]"
-                />
-              </div>
-            </div>
-
-            {/* 4-Stat Macro Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-              <div className="monolith-core p-2.5 rounded-xl">
-                <div className="text-zinc-500 text-[10px] font-bold">All-Time High (ATH):</div>
-                <div className="text-[#00F279] font-bold text-xs mt-0.5">${marketStats24h.athPrice.toFixed(4)}</div>
-              </div>
-              <div className="monolith-core p-2.5 rounded-xl">
-                <div className="text-zinc-500 text-[10px] font-bold">Cycle Floor (ATL):</div>
-                <div className="text-[#FF2A4D] font-bold text-xs mt-0.5">${marketStats24h.atlPrice.toFixed(4)}</div>
-              </div>
-              <div className="monolith-core p-2.5 rounded-xl">
-                <div className="text-zinc-500 text-[10px] font-bold">24H Volume (Est):</div>
-                <div className="text-white font-bold text-xs mt-0.5">{marketStats24h.vol24hUSD}</div>
-              </div>
-              <div className="monolith-core p-2.5 rounded-xl">
-                <div className="text-zinc-500 text-[10px] font-bold">Market Sentiment:</div>
-                <div className="text-[#CCFF00] font-bold text-xs mt-0.5">{marketStats24h.longSentiment}% L / {marketStats24h.shortSentiment}% S</div>
-              </div>
-            </div>
-          </div>
-
           {/* Real-Time Active Position HUD or Awaiting Order Standby Sentinel */}
           {activePosition ? (
-            <div className="bg-[#0E1015] rounded-xl p-3.5 border border-white/20 relative overflow-hidden font-mono">
+            <div className="bg-[#0E1015] rounded-xl p-3.5 border border-white/20 relative overflow-hidden font-mono shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
               <div className="flex flex-wrap justify-between items-center pb-2.5 border-b border-white/[0.08] gap-2">
                 <div className="flex items-center space-x-3">
                   <span className={"px-2.5 py-1 rounded text-xs font-mono font-black " + (
@@ -1755,16 +1782,23 @@ export default function FluxGamingTerminal() {
                 <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
                   <div className="text-slate-400 mb-1">Entry Price:</div>
                   <div className="text-base font-bold text-white">{"$" + activePosition.entryPrice.toFixed(4)}</div>
+                  {currentPositionPnL.breakEvenPrice > 0 && (
+                    <div className="text-[10px] text-zinc-400 mt-1 font-mono">
+                      Break-even: <span className="text-[#CCFF00] font-bold">${currentPositionPnL.breakEvenPrice.toFixed(4)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
                   <div className="text-slate-400 mb-1">Mark Price:</div>
                   <div className="text-base font-bold text-cyan-300">{"$" + monPrice.toFixed(4)}</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Pyth Sub-Second Feed</div>
                 </div>
 
                 <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
                   <div className="text-slate-400 mb-1">Margin Locked:</div>
                   <div className="text-base font-bold text-slate-200">{activePosition.margin} MON</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Fee: {currentPositionPnL.fee ? currentPositionPnL.fee.toFixed(3) : "0.00"} MON</div>
                 </div>
 
                 <div className={"p-3.5 rounded-2xl border " + (
@@ -1773,7 +1807,7 @@ export default function FluxGamingTerminal() {
                     : "bg-rose-950/40 border-rose-500/50"
                 )}>
                   <div className="flex justify-between items-center text-slate-400 mb-1">
-                    <span>Net Unrealized PnL:</span>
+                    <span>Net PnL (After Fee):</span>
                     <span className="text-[10px] text-cyan-300 font-bold">1-SEC FUNDING APPLIED</span>
                   </div>
                   <div className={"text-base font-black flex items-center " + (
@@ -1783,9 +1817,9 @@ export default function FluxGamingTerminal() {
                     {(currentPositionPnL.pnlMon >= 0 ? "+" : "") + currentPositionPnL.pnlMon.toFixed(2)} MON ({currentPositionPnL.pnlPercent.toFixed(1)}%)
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1 flex justify-between border-t border-purple-900/30 pt-1">
-                    <span>Accrued Block Funding:</span>
+                    <span>Gross: {(currentPositionPnL.grossPnlMon >= 0 ? "+" : "") + currentPositionPnL.grossPnlMon.toFixed(2)} MON</span>
                     <span className={"font-bold " + (activePosition.isLong ? "text-rose-400" : "text-emerald-400")}>
-                      {activePosition.isLong ? "-" : "+"}{blockFundingAccrual.toFixed(5)} MON
+                      Fund: {activePosition.isLong ? "-" : "+"}{blockFundingAccrual.toFixed(4)} MON
                     </span>
                   </div>
                 </div>
@@ -1863,6 +1897,53 @@ export default function FluxGamingTerminal() {
               </div>
             </div>
           )}
+
+          {/* 24H Market Range & Liquidity Depth (Double-Bezel Monolith Chassis) */}
+          <div className="monolith-chassis rounded-2xl p-4 font-mono text-xs space-y-3">
+            <div className="flex justify-between items-center text-zinc-300">
+              <div className="flex items-center space-x-2 font-bold text-[#00E5FF] text-xs">
+                <BarChart2 className="w-3.5 h-3.5 text-[#00E5FF]" />
+                <span className="font-black uppercase tracking-wider text-[11px]">24H MARKET RANGE & LIQUIDITY DEPTH</span>
+              </div>
+              <span className="text-[10px] text-zinc-400 bg-white/5 px-2 py-0.5 rounded border border-white/10 font-bold">
+                PYTH HERMES STREAM
+              </span>
+            </div>
+
+            {/* Dynamic 24h Price Range Slider Bar */}
+            <div className="space-y-1.5 monolith-core p-3 rounded-xl">
+              <div className="flex justify-between text-[10px] text-zinc-400 font-medium">
+                <span>24h Low: <strong className="text-white">${marketStats24h.low24h.toFixed(4)}</strong></span>
+                <span>24h High: <strong className="text-white">${marketStats24h.high24h.toFixed(4)}</strong></span>
+              </div>
+              <div className="w-full bg-black/60 h-2 rounded-full overflow-hidden relative border border-white/10">
+                <div 
+                  style={{ width: `${marketStats24h.rangePercent}%` }} 
+                  className="h-full bg-gradient-to-r from-[#00E5FF] to-[#CCFF00] rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(204,255,0,0.4)]"
+                />
+              </div>
+            </div>
+
+            {/* 4-Stat Macro Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+              <div className="monolith-core p-2.5 rounded-xl">
+                <div className="text-zinc-500 text-[10px] font-bold">All-Time High (ATH):</div>
+                <div className="text-[#00F279] font-bold text-xs mt-0.5">${marketStats24h.athPrice.toFixed(4)}</div>
+              </div>
+              <div className="monolith-core p-2.5 rounded-xl">
+                <div className="text-zinc-500 text-[10px] font-bold">Cycle Floor (ATL):</div>
+                <div className="text-[#FF2A4D] font-bold text-xs mt-0.5">${marketStats24h.atlPrice.toFixed(4)}</div>
+              </div>
+              <div className="monolith-core p-2.5 rounded-xl">
+                <div className="text-zinc-500 text-[10px] font-bold">24H Volume (Est):</div>
+                <div className="text-white font-bold text-xs mt-0.5">{marketStats24h.vol24hUSD}</div>
+              </div>
+              <div className="monolith-core p-2.5 rounded-xl">
+                <div className="text-zinc-500 text-[10px] font-bold">Market Sentiment:</div>
+                <div className="text-[#CCFF00] font-bold text-xs mt-0.5">{marketStats24h.longSentiment}% L / {marketStats24h.shortSentiment}% S</div>
+              </div>
+            </div>
+          </div>
 
 
           {/* S-Tier Monad Block-STM Live Shard Heatmap with Deterministic Trader Shard Highlighting & Sandbox Parallel Stress Simulator */}
@@ -1960,7 +2041,13 @@ export default function FluxGamingTerminal() {
                           : "bg-[#00E5FF]/10 border-[#00E5FF] text-[#00E5FF] shadow-[0_0_18px_rgba(0,229,255,0.25)]") 
                       : "bg-white/[0.03] border-white/10 text-zinc-300 hover:border-[#CCFF00]/60 hover:text-white"
                   )}
-                  title={is1ClickTrading ? "Manage active 1-Click Session Key (Lock or Revoke)" : "Click to enable 1-Click Trading: 0 MetaMask popups per trade"}
+                  title={is1ClickTrading 
+                    ? (activeSession?.isLocked 
+                        ? "Session Key Locked: Click to unlock with PIN" 
+                        : (isPilotMode 
+                            ? "1-Click Active (Sandbox): 0 MetaMask popups enabled" 
+                            : "1-Click Active (Testnet): Session key active for Monad L1 trades")) 
+                    : "Enable 1-Click Trading Session Key"}
                 >
                   {is1ClickTrading ? (
                     activeSession?.isLocked ? (
@@ -2461,6 +2548,36 @@ export default function FluxGamingTerminal() {
                         onClick={() => {
                           // Clean sandbox liquidation trigger
                           const bounty = +(activePosition.margin * 0.05).toFixed(4);
+                          const liqHistoryEntry = {
+                            id: activePosition.epochId,
+                            txHash: null,
+                            type: activePosition.isLong ? "LONG (LIQ)" : "SHORT (LIQ)",
+                            leverage: activePosition.leverage,
+                            margin: activePosition.margin,
+                            entryPrice: activePosition.entryPrice,
+                            exitPrice: effectivePrice,
+                            funding: -(
+                              (activePosition.margin * activePosition.leverage * 0.000024) *
+                              Math.max(1, (Date.now() - (activePosition.startTime || Date.now())) / 1000)
+                            ).toFixed(4),
+                            pnl: -activePosition.margin,
+                            pnlPercent: "-100.0%",
+                            isWin: false,
+                            balanceBefore: activePosition.balanceBefore != null ? +activePosition.balanceBefore.toFixed(4) : +userBalance.toFixed(4),
+                            balanceAfter: +userBalance.toFixed(4),
+                            fee: activePosition.fee ? +activePosition.fee.toFixed(4) : +(activePosition.margin * activePosition.leverage * 0.0008).toFixed(4),
+                            gasFee: "< 0.002",
+                            time: "Just now"
+                          };
+
+                          setSandboxHistory((prev) => {
+                            const updated = [liqHistoryEntry, ...prev.slice(0, 9)];
+                            if (typeof window !== "undefined") {
+                              localStorage.setItem("flux_sandbox_history", JSON.stringify(updated));
+                            }
+                            return updated;
+                          });
+
                           setTxToast({
                             title: "⚡ KEEPER LIQUIDATION EXECUTED",
                             amount: `Keeper Bounty: +${bounty} MON`,
@@ -2471,6 +2588,7 @@ export default function FluxGamingTerminal() {
                           setActivePosition(null);
                           setIsSimActive(false);
                           setSimPriceShift(0);
+                          setSimBasePrice(null);
                           setTimeout(() => setTxToast(null), 5000);
                         }}
                         className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:from-rose-500 hover:to-red-500 font-mono font-black text-xs text-white shadow-lg shadow-rose-600/50 animate-pulse active:scale-95 transition-all"
@@ -2556,26 +2674,21 @@ export default function FluxGamingTerminal() {
                         return;
                       }
 
-                      const confirmed = window.confirm(
-                        "MANUALLY SETTLE FUNDING CHECKPOINT\n\n" +
-                        "This sends a real on-chain transaction calling checkpointFundingRate() on FluxMarket.\n\n" +
-                        "• Gas cost: ~0.002–0.005 MON (Monad Testnet gas)\n" +
-                        "• Effect: Immediately settles the per-block funding accumulator.\n" +
-                        "• Your collateral is NOT affected — this only advances the funding index.\n\n" +
-                        "The background keeper bot runs this automatically every ~1s.\n" +
-                        "Use this to prove censorship-resistance: any wallet can trigger it independently.\n\n" +
-                        "Proceed?"
-                      );
-                      if (!confirmed) return;
-
                       try {
                         setIsSubmitting(true);
                         const walletClient = getWalletClient();
                         const publicClient = getPublicClient();
 
                         if (!walletClient || !walletAddress) {
-                          alert("Please connect wallet on Monad Testnet to trigger public keeper checkpoint.");
+                          setTxToast({
+                            title: "WALLET REQUIRED",
+                            amount: "Connect Monad Wallet",
+                            detail: "Please connect your wallet to trigger manual keeper pulse.",
+                            type: "CLOSE",
+                            isWin: false
+                          });
                           setIsSubmitting(false);
+                          setTimeout(() => setTxToast(null), 4000);
                           return;
                         }
 
@@ -2608,10 +2721,18 @@ export default function FluxGamingTerminal() {
                       } catch (err) {
                         console.warn("Checkpoint trigger error:", err);
                         setIsSubmitting(false);
-                        setTxToast(null);
-                        if (err.message && err.message.includes("Already checkpointed")) {
-                          alert("Checkpoint already executed this block! Monad anti-sandwich cooldown active.\n\nThis proves the anti-sandwich protection is working — only one checkpoint per block is allowed.");
-                        }
+                        const isCooldown = err.message && err.message.includes("Already checkpointed");
+                        const isRejected = err.message && err.message.includes("User rejected");
+                        setTxToast({
+                          title: isCooldown ? "ANTI-SANDWICH COOLDOWN" : (isRejected ? "PULSE CANCELLED" : "CHECKPOINT REVERTED"),
+                          amount: isCooldown ? "1 Checkpoint / Block Max" : "Action Cancelled",
+                          detail: isCooldown 
+                            ? "Anti-sandwich protection active: already settled in this block." 
+                            : (isRejected ? "Transaction cancelled in wallet." : "Failed to broadcast checkpoint pulse."),
+                          type: "CLOSE",
+                          isWin: false
+                        });
+                        setTimeout(() => setTxToast(null), 5000);
                       }
                     }}
                     className="w-full py-2.5 rounded bg-[#161A24] hover:bg-[#1E2330] border border-white/20 font-mono font-bold text-xs text-[#CCFF00] hover:text-white flex items-center justify-center space-x-2 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
@@ -2659,15 +2780,21 @@ export default function FluxGamingTerminal() {
                 )}
                 <button
                   onClick={() => {
-                    if (confirm("Clear local ledger history cache? This will reset the display table.")) {
-                      if (isPilotMode) {
-                        setSandboxHistory([]);
-                        localStorage.removeItem("flux_sandbox_history");
-                      } else {
-                        setTestnetHistory([]);
-                        localStorage.removeItem("flux_testnet_history");
-                      }
+                    if (isPilotMode) {
+                      setSandboxHistory([]);
+                      localStorage.removeItem("flux_sandbox_history");
+                    } else {
+                      setTestnetHistory([]);
+                      localStorage.removeItem("flux_testnet_history");
                     }
+                    setTxToast({
+                      title: "LEDGER CACHE RESET",
+                      amount: "History Cleared",
+                      detail: "Local trade table reset. New trades will log fresh onchain records.",
+                      type: "CLOSE",
+                      isWin: false
+                    });
+                    setTimeout(() => setTxToast(null), 3000);
                   }}
                   title="Clear cached ledger trade logs"
                   className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs font-mono transition-all active:scale-95 cursor-pointer font-bold"
@@ -2918,14 +3045,32 @@ export default function FluxGamingTerminal() {
                 <div className="bg-[#070318] p-4 rounded-2xl border border-cyan-500/20 font-mono text-xs space-y-3">
                   <div className="flex items-center space-x-2 text-cyan-300 font-bold">
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span>HOW 1-CLICK TRADING WORKS</span>
+                    <span>SESSION KEY ARCHITECTURE & EXECUTION</span>
                   </div>
                   <p className="text-slate-300 leading-relaxed text-[11px]">
-                    You sign <strong>once</strong> in MetaMask to approve an ephemeral trading key. All subsequent orders open and close instantly in 50ms with <strong>0 popups</strong>.
+                    You sign <strong>once</strong> in MetaMask to approve an ephemeral session trading keypair.
                   </p>
+                  
+                  {/* Clear Environment Execution Modes */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] pt-1">
+                    <div className="p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300">
+                      <div className="font-bold flex items-center space-x-1">
+                        <span>⚡ JUDGE PILOT SANDBOX</span>
+                      </div>
+                      <p className="text-slate-400 mt-0.5">Instant 50ms sub-second execution with <strong>0 MetaMask popups</strong>.</p>
+                    </div>
+
+                    <div className="p-2 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-cyan-300">
+                      <div className="font-bold flex items-center space-x-1">
+                        <span>🛡️ MONAD TESTNET (L1)</span>
+                      </div>
+                      <p className="text-slate-400 mt-0.5">Non-custodial smart contract: transfers live MON collateral directly from your wallet.</p>
+                    </div>
+                  </div>
+
                   <div className="border-t border-purple-900/30 pt-2 text-[10px] text-emerald-400 flex items-center space-x-1.5">
                     <span>🛡️</span>
-                    <span>Zero-Withdrawal Guarantee: Session keys can only place trades. They have 0 power to move or withdraw funds.</span>
+                    <span>Zero-Withdrawal Guarantee: Session keys can only place & close trades. They have 0 power to move or withdraw funds.</span>
                   </div>
                 </div>
 
@@ -3563,12 +3708,12 @@ export default function FluxGamingTerminal() {
                 <div className="flex justify-between items-center text-slate-300">
                   <span className="font-mono">{selectedSlipTrade.txHash ? `${selectedSlipTrade.txHash.slice(0, 14)}...${selectedSlipTrade.txHash.slice(-8)}` : `Simulated Monad Tx: 0x${Math.abs(selectedSlipTrade.id * 17921).toString(16)}...`}</span>
                   <a
-                    href={`https://testnet.monadscan.com/address/${CONTRACT_ADDRESSES.market}`}
+                    href={selectedSlipTrade.txHash ? `https://testnet.monadscan.com/tx/${selectedSlipTrade.txHash}` : `https://testnet.monadscan.com/address/${CONTRACT_ADDRESSES.market}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[#CCFF00] hover:underline flex items-center gap-1 font-bold"
                   >
-                    <span>MonadScan</span>
+                    <span>{selectedSlipTrade.txHash ? "View Tx" : "MonadScan"}</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
