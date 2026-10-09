@@ -2618,7 +2618,13 @@ export default function FluxGamingTerminal() {
                 <span className="text-[11px]">KEEPER SENTINEL (MONADSCAN VERIFIED)</span>
               </div>
               <div className="flex items-center space-x-1.5 text-slate-400 text-[10px]">
-                <span className="text-emerald-400 font-bold">{isPilotMode ? "SANDBOX SIM" : "ONCHAIN CONTRACT"}</span>
+                <span className={"font-bold px-1.5 py-0.5 rounded border " + (
+                  isPilotMode 
+                    ? "text-[#FFB800] bg-[#FFB800]/10 border-[#FFB800]/30" 
+                    : "text-[#00FF66] bg-[#00FF66]/10 border-[#00FF66]/30"
+                )}>
+                  {isPilotMode ? "SANDBOX SIM" : "🟢 SENTINEL ACTIVE (1s DRIFT)"}
+                </span>
                 <ChevronDown className={"w-3.5 h-3.5 transition-transform " + (showKeeperDrawer ? "rotate-180" : "")} />
               </div>
             </button>
@@ -2738,10 +2744,10 @@ export default function FluxGamingTerminal() {
                     className="w-full py-2.5 rounded bg-[#161A24] hover:bg-[#1E2330] border border-white/20 font-mono font-bold text-xs text-[#CCFF00] hover:text-white flex items-center justify-center space-x-2 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
                   >
                     <Zap className="w-3.5 h-3.5 text-[#CCFF00]" />
-                    <span>MANUALLY SETTLE FUNDING CHECKPOINT (~0.002 MON)</span>
+                    <span>⚡ FORCE KEEPER HEARTBEAT (PUBLIC DISPATCH)</span>
                   </button>
                   <p className="text-[10px] text-slate-400 text-center mt-1 font-mono">
-                    Censorship-resistant fallback — any wallet can settle funding independently of the bot.
+                    Censorship-resistant fallback — any judge or wallet can settle continuous funding directly on Monad.
                   </p>
                 </div>
               </div>

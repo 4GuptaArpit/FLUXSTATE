@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node test/securityAudit.test.mjs && node test/evmIntegration.test.mjs"
+    "test": "node test/evmFullLifecycle.test.mjs && node test/securityAudit.test.mjs && node test/evmIntegration.test.mjs"
   },
   "keywords": [],
   "author": "",

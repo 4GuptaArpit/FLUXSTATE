@@ -202,3 +202,30 @@ export function revokeSession() {
   localStorage.removeItem(SESSION_STORAGE_KEY);
   sessionStorage.removeItem(SESSION_STORAGE_KEY);
 }
+
+/**
+ * Create a Viem wallet client powered directly by the authorized session private key
+ */
+export function createSessionWalletClient(sessionPrivateKey) {
+  if (!sessionPrivateKey) return null;
+  try {
+    const account = privateKeyToAccount(sessionPrivateKey);
+    return createWalletClient({
+      account,
+      chain: {
+        id: 10143,
+        name: "Monad Testnet",
+        nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
+        rpcUrls: {
+          default: { http: ["https://testnet-rpc.monad.xyz"] },
+          public: { http: ["https://testnet-rpc.monad.xyz"] }
+        }
+      },
+      transport: http("https://testnet-rpc.monad.xyz")
+    });
+  } catch (e) {
+    console.warn("Failed to create session wallet client:", e);
+    return null;
+  }
+}
+

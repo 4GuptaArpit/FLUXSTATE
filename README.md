@@ -185,10 +185,11 @@ Account Write Contention Rate       : 0.00% (Decoupled 16 Storage Slots)
 ### 2. Invariant & Security Test Battery
 Formally verified invariant suite with detailed execution logs in [`contracts/test/AUDIT_LOGS.md`](file:///E:/HACKATHON/MONAD/contracts/test/AUDIT_LOGS.md):
 ```bash
-node contracts/test/brutalSecurityAudit.test.mjs
-node contracts/test/evmIntegration.test.mjs
+cd contracts
+npm test
 ```
-- **Formal Invariant Report**: **10/10 passing** verified in [`AUDIT_LOGS.md`](file:///E:/HACKATHON/MONAD/contracts/test/AUDIT_LOGS.md).
+- **Formal Invariant Report**: **24/24 passing** across Lifecycle, Security Invariant, and Live RPC integration test suites.
+- **EVM Lifecycle**: 10 formal invariants verified against compiled mathematical models in `evmFullLifecycle.test.mjs`.
 - **Access Control**: `onlyMarket` strictly protects `updateFundingIndex` and vault settlements.
 - **Anti-Sandwich Protection**: Block cooldown on `checkpointFundingRate()` prevents frontrunning.
 - **Checks-Effects-Interactions (CEI)**: Position state deleted before any external asset transfer.
@@ -205,10 +206,10 @@ cd FLUXSTATE
 
 # 2. Run benchmarks and invariant tests
 node scripts/stress_test_parallel.mjs
-node contracts/test/brutalSecurityAudit.test.mjs
+cd contracts && npm test
 
 # 3. Start the Next.js trading terminal
-cd frontend
+cd ../frontend
 npm install
 npm run dev
 ```
