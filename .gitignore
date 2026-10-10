@@ -37,10 +37,4 @@ Thumbs.db
 .idea/
 
 # Internal documentation & submission drafts
-PROJECT_LOG.md
 SUBMISSION_DOSSIER.md
-*CLAUDE.md
-*AGENTS.md
-*.bak
-*.tmp
-frontend/test_web3_logic.mjs

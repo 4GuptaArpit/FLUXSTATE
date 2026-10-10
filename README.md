@@ -2,6 +2,8 @@
 
 <div align="center">
 
+![FluxState — Institutional Perpetuals Native to Monad Parallel EVM](./assets/readme/hero.svg)
+
 [![Monad Testnet](https://img.shields.io/badge/Blockchain-Monad%20Testnet%20(10143)-836EF9?style=for-the-badge&logo=ethereum&logoColor=white)](https://testnet.monadscan.com)
 [![Track 01](https://img.shields.io/badge/Track-01%3A%20Onchain%20Finance%20%26%20Trading-00F2FE?style=for-the-badge)](https://monad.xyz)
 [![Funding Cadence](https://img.shields.io/badge/Funding%20Cadence-Every%201s%20Block-00E676?style=for-the-badge)](https://testnet.monadscan.com)
@@ -11,9 +13,19 @@
 **Monad Metropolis Global Hackathon — Track 01: Onchain Finance & Trading**  
 *Challenge: "Perpetuals with funding that updates every block"*
 
-[🚀 Live Trading Terminal](https://fluxstate.vercel.app) • [🎬 Video Demo](https://youtu.be/MS5M6ULlc7U) • [📖 Contract Audit](https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5) • [⚡ 500-Order Parallel Benchmark](#-parallel-block-stm-benchmark)
+[🚀 Live Trading Terminal](https://fluxstate.vercel.app) • [🎬 Watch Video Demo](https://youtu.be/MS5M6ULlc7U) • [📖 Contract Audit](https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5) • [⚡ 500-Order Parallel Benchmark](#-parallel-block-stm-benchmark)
 
 </div>
+
+---
+
+## 🎬 Official Video Walkthrough & Live Demo
+
+[![Watch FluxState Architecture & Live Demo](https://img.shields.io/badge/YouTube-Watch%20Official%20Hackathon%20Video%20Demo%20(3m)-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/MS5M6ULlc7U)
+
+> [!NOTE]
+> **Video Link**: [https://youtu.be/MS5M6ULlc7U](https://youtu.be/MS5M6ULlc7U)  
+> Highlights: 1-Click trading with session keys, sub-second block funding calculations, live 16-shard parallel matrix telemetry, and autonomous keeper checkpointing on Monad Testnet.
 
 ---
 
@@ -261,3 +273,4 @@ npm start
 - **Network**: Monad Testnet (Chain ID: 10143)
 - **Repository**: [https://github.com/4GuptaArpit/FLUXSTATE](https://github.com/4GuptaArpit/FLUXSTATE)
 - **Live Terminal**: [https://fluxstate.vercel.app/](https://fluxstate.vercel.app/)
+- **Video Walkthrough**: [https://youtu.be/MS5M6ULlc7U](https://youtu.be/MS5M6ULlc7U)
