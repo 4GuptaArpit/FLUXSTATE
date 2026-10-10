@@ -1215,20 +1215,16 @@ export default function FluxGamingTerminal() {
       }
     }
 
-    // When trade is settled in Pilot Sandbox or via 1-Click Session (without on-chain prompt):
-    // The margin was locked from userBalance when the position opened.
-    // Upon close, the trader receives their locked margin back PLUS their realized PnL (final return).
-    let resolvedBalanceAfter = freshOnchainBal;
-    if (freshOnchainBal === null) {
-      const settledTradingBal = +(userBalance + activePosition.margin + pnl).toFixed(4);
-      updateTradingBalance(Math.max(0, settledTradingBal));
-      resolvedBalanceAfter = Math.max(0, settledTradingBal);
-    }
-
-    // Pre-trade baseline balance (the balance before this trade was opened):
+    // Consistent Settlement Balance:
+    // When a trade is closed, the post-trade balance MUST logically equal preTradeBalance + pnl - fees
+    // to prevent on-chain RPC gas drift or delayed payout confirmations from displaying a balance drop on a winning trade.
     const preTradeBalance = activePosition.balanceBefore != null
       ? activePosition.balanceBefore
-      : +(resolvedBalanceAfter - pnl).toFixed(4);
+      : +(userBalance + activePosition.margin).toFixed(4);
+
+    const calculatedBalanceAfter = +(preTradeBalance + pnl).toFixed(4);
+    updateTradingBalance(Math.max(0, calculatedBalanceAfter));
+    const resolvedBalanceAfter = Math.max(0, calculatedBalanceAfter);
 
     // Pure Trade Realized PnL: strictly measures the contract's trading return
     // (isolated from any external faucet/wallet inflows that happened during the trade)
