@@ -446,7 +446,7 @@ export default function FluxGamingTerminal() {
   }, [epochId, activePosition]);
 
   // Fetch real onchain MON balance directly from Monad Testnet RPC
-  const fetchRealBalance = async (address) => {
+  const fetchRealBalance = async (address, force = false) => {
     try {
       const publicClient = getPublicClient();
       const rawBalance = await publicClient.getBalance({ address });
@@ -454,11 +454,25 @@ export default function FluxGamingTerminal() {
       const formatted = parseFloat(exactEtherStr);
 
       if (!isPilotMode) {
+        // If 1-Click trading is active and not an explicit force sync, prioritize session balance
+        const savedSessionMargin = typeof window !== "undefined" 
+          ? localStorage.getItem("flux_testnet_margin_" + address.toLowerCase())
+          : null;
+
+        if (!force && is1ClickTrading && savedSessionMargin !== null) {
+          const parsedMargin = parseFloat(savedSessionMargin);
+          if (!isNaN(parsedMargin)) {
+            setUserBalance(parsedMargin);
+            return parsedMargin;
+          }
+        }
         setUserBalance(formatted);
       }
 
       if (typeof window !== "undefined") {
-        localStorage.setItem("flux_testnet_margin_" + address.toLowerCase(), formatted.toString());
+        if (force || !is1ClickTrading) {
+          localStorage.setItem("flux_testnet_margin_" + address.toLowerCase(), formatted.toString());
+        }
       }
       return formatted;
     } catch (err) {
@@ -467,22 +481,25 @@ export default function FluxGamingTerminal() {
     }
   };
 
-  // Continuous Onchain Balance Sync: Polls RPC every 3 seconds when connected on Live Testnet
+  // Initial Onchain Balance Sync: Fetches real balance ONLY when wallet connects or changes
   useEffect(() => {
     if (!walletAddress || isPilotMode) return;
 
-    // Initial onchain sync on wallet connect
-    fetchRealBalance(walletAddress);
+    // Check if there is an active session balance to restore
+    const saved = typeof window !== "undefined" 
+      ? localStorage.getItem("flux_testnet_margin_" + walletAddress.toLowerCase())
+      : null;
 
-    const syncInterval = setInterval(() => {
-      // In 1-Click mode or during an open position, do not clobber session balance with stale RPC data
-      if (!is1ClickTrading && !activePosition) {
-        fetchRealBalance(walletAddress);
+    if (saved !== null) {
+      const p = parseFloat(saved);
+      if (!isNaN(p)) {
+        setUserBalance(p);
+        return;
       }
-    }, 3000);
+    }
 
-    return () => clearInterval(syncInterval);
-  }, [walletAddress, isPilotMode, is1ClickTrading, activePosition]);
+    fetchRealBalance(walletAddress);
+  }, [walletAddress, isPilotMode]);
 
   // Helper to persist updated trading margin balance per mode
   const updateTradingBalance = (newBal) => {
@@ -601,7 +618,6 @@ export default function FluxGamingTerminal() {
             if (accounts && accounts.length > 0) {
               setWalletAddress(accounts[0]);
               setIsPilotMode(false);
-              fetchRealBalance(accounts[0]);
             } else {
               setIsPilotMode(true);
               setUserBalance(1000.0);
@@ -1216,15 +1232,17 @@ export default function FluxGamingTerminal() {
     }
 
     // Consistent Settlement Balance:
-    // When a trade is closed, the post-trade balance MUST logically equal preTradeBalance + pnl - fees
-    // to prevent on-chain RPC gas drift or delayed payout confirmations from displaying a balance drop on a winning trade.
+    // When an onchain transaction mines, freshOnchainBal is the actual wallet balance on Monad.
+    // In Pilot Sandbox or 1-Click Session mode, calculate from preTradeBalance + pnl.
+    // This guarantees the Top Balance Pill and Ledger "Bal: Before -> After" are ALWAYS 100% IDENTICAL.
     const preTradeBalance = activePosition.balanceBefore != null
       ? activePosition.balanceBefore
       : +(userBalance + activePosition.margin).toFixed(4);
 
     const calculatedBalanceAfter = +(preTradeBalance + pnl).toFixed(4);
-    updateTradingBalance(Math.max(0, calculatedBalanceAfter));
-    const resolvedBalanceAfter = Math.max(0, calculatedBalanceAfter);
+    const finalBal = freshOnchainBal !== null ? freshOnchainBal : Math.max(0, calculatedBalanceAfter);
+    updateTradingBalance(finalBal);
+    const resolvedBalanceAfter = finalBal;
 
     // Pure Trade Realized PnL: strictly measures the contract's trading return
     // (isolated from any external faucet/wallet inflows that happened during the trade)
@@ -1412,9 +1430,6 @@ export default function FluxGamingTerminal() {
                 <Zap className="w-3 h-3 text-[#00E5FF] animate-pulse" />
               )}
               <span className="text-[11px]">{activeSession.isLocked ? "LOCKED" : "1-CLICK"}</span>
-              <span className="text-[8.5px] text-zinc-400 bg-black/40 px-1 py-0.5 rounded font-mono">
-                {activeSession.storageType === "local" ? "24H" : "TAB"}
-              </span>
             </div>
           )}
 
@@ -1915,7 +1930,7 @@ export default function FluxGamingTerminal() {
               <div className="flex items-center space-x-2.5">
                 {walletAddress && (
                   <button
-                    onClick={() => fetchRealBalance(walletAddress)}
+                    onClick={() => fetchRealBalance(walletAddress, true)}
                     title="Resync balance directly from Monad Testnet RPC"
                     className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 text-xs font-mono transition-all active:scale-95 cursor-pointer font-bold"
                   >
