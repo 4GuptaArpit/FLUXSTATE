@@ -48,12 +48,21 @@ import {
 } from "../lib/sessionKey";
 import { formatEther, parseEther } from "viem";
 import { ShardMonitor } from "../components/ShardMonitor";
+import { MathFormulaModal } from "../components/modals/MathFormulaModal";
+import { SettlementSlipModal } from "../components/modals/SettlementSlipModal";
+import { UnlockModal } from "../components/modals/UnlockModal";
+import { SessionModal } from "../components/modals/SessionModal";
+import { GuideModal } from "../components/modals/GuideModal";
+import { KeeperSentinelDrawer } from "../components/telemetry/KeeperSentinelDrawer";
+import { VolatilityStressTester } from "../components/simulator/VolatilityStressTester";
+import { OrderCockpit } from "../components/trading/OrderCockpit";
+import { PositionHUD } from "../components/trading/PositionHUD";
 
-// Universal crypto balance formatter: strictly floors to specified decimals to prevent rounding up past actual funds
+// Universal crypto balance formatter: formats to specified decimal places cleanly
 const formatBalance = (val, decimals = 4) => {
   if (val == null || isNaN(val)) return "0." + "0".repeat(decimals);
-  const factor = Math.pow(10, decimals);
-  return (Math.floor(val * factor) / factor).toFixed(decimals);
+  const num = typeof val === "number" ? val : parseFloat(val);
+  return num.toFixed(decimals);
 };
 
 export default function FluxGamingTerminal() {
@@ -1201,22 +1210,19 @@ export default function FluxGamingTerminal() {
       }
     }
 
-    // Compute true pre-trade baseline balance
-    const preTradeBalance = activePosition.balanceBefore != null
-      ? activePosition.balanceBefore
-      : (freshOnchainBal !== null 
-          ? +(freshOnchainBal - finalReturn + activePosition.margin).toFixed(4)
-          : +(userBalance + activePosition.margin).toFixed(4));
-
-    // In Sandbox mode or 1-Click fast mode, accurately credit user's trading balance
-    if (isPilotMode || (is1ClickTrading && freshOnchainBal === null)) {
-      const settledTradingBal = +(preTradeBalance + pnl).toFixed(4);
+    // When trade is settled in Pilot Sandbox or via 1-Click Session (without on-chain prompt),
+    // update trading balance with the realized PnL:
+    let resolvedBalanceAfter = freshOnchainBal;
+    if (freshOnchainBal === null) {
+      const settledTradingBal = +(userBalance + pnl).toFixed(4);
       updateTradingBalance(Math.max(0, settledTradingBal));
+      resolvedBalanceAfter = Math.max(0, settledTradingBal);
     }
 
-    const resolvedBalanceAfter = freshOnchainBal !== null 
-      ? freshOnchainBal 
-      : +(preTradeBalance + pnl).toFixed(4);
+    // Compute true pre-trade baseline balance
+    // Pre-trade balance is resolvedBalanceAfter - realized PnL, ensuring the ledger transition
+    // (Bal: Before ➔ After) mathematically matches the realized PnL
+    const preTradeBalance = +(resolvedBalanceAfter - pnl).toFixed(4);
 
     // Pure Trade Realized PnL: strictly measures the contract's trading return
     // (isolated from any external faucet/wallet inflows that happened during the trade)
@@ -1732,218 +1738,21 @@ export default function FluxGamingTerminal() {
             </div>
           </div>
 
-          {/* Real-Time Active Position HUD or Awaiting Order Standby Sentinel */}
-          {activePosition ? (
-            <div className="bg-[#0E1015] rounded-xl p-3.5 border border-white/20 relative overflow-hidden font-mono shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
-              <div className="flex flex-wrap justify-between items-center pb-2.5 border-b border-white/[0.08] gap-2">
-                <div className="flex items-center space-x-3">
-                  <span className={"px-2.5 py-1 rounded text-xs font-mono font-black " + (
-                    activePosition.isLong 
-                      ? "bg-[#00FF66] text-black" 
-                      : "bg-[#FF3344] text-white"
-                  )}>
-                    {activePosition.isLong ? "LONG" : "SHORT"} {activePosition.leverage}x
-                  </span>
-                  <span className="font-mono text-xs font-bold text-white uppercase tracking-wider">
-                    MON-PERP • Epoch #{activePosition.epochId}
-                  </span>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {isPilotMode && (
-                    <button
-                      onClick={() => setIsSimActive(!isSimActive)}
-                      className={"px-3 py-2 rounded-xl font-mono text-xs font-bold border transition-all flex items-center space-x-1.5 active:scale-95 " + (
-                        isSimActive 
-                          ? "bg-amber-950/80 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.3)]" 
-                          : "bg-purple-950/60 border-purple-500/40 text-purple-300 hover:text-white hover:border-cyan-400"
-                      )}
-                      title="Simulate price crashes and test liquidation thresholds directly"
-                    >
-                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                      <span>{isSimActive ? "CLOSE STRESS SIM" : "STRESS TEST MMR"}</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={handleClosePosition}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 font-mono text-xs font-black uppercase text-white shadow-lg shadow-purple-600/30 active:scale-95 transition-all flex items-center space-x-2"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    <span>CLOSE & SETTLE PAYOUT</span>
-                    <span className="text-[10px] bg-black/40 text-rose-300 border border-rose-400/40 px-1.5 py-0.5 rounded font-bold ml-1">
-                      KEY [C]
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 text-xs font-mono">
-                <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
-                  <div className="text-slate-400 mb-1">Entry Price:</div>
-                  <div className="text-base font-bold text-white">{"$" + activePosition.entryPrice.toFixed(4)}</div>
-                  {currentPositionPnL.breakEvenPrice > 0 && (
-                    <div className="text-[10px] text-zinc-400 mt-1 font-mono">
-                      Break-even: <span className="text-[#CCFF00] font-bold">${currentPositionPnL.breakEvenPrice.toFixed(4)}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
-                  <div className="text-slate-400 mb-1">Mark Price:</div>
-                  <div className="text-base font-bold text-cyan-300">{"$" + monPrice.toFixed(4)}</div>
-                  <div className="text-[10px] text-slate-500 mt-1">Pyth Sub-Second Feed</div>
-                </div>
-
-                <div className="bg-[#0A051D] p-3.5 rounded-2xl border border-purple-900/40">
-                  <div className="text-slate-400 mb-1">Margin Locked:</div>
-                  <div className="text-base font-bold text-slate-200">{activePosition.margin} MON</div>
-                  <div className="text-[10px] text-slate-500 mt-1">Fee: {currentPositionPnL.fee ? currentPositionPnL.fee.toFixed(3) : "0.00"} MON</div>
-                </div>
-
-                <div className={"p-3.5 rounded-2xl border " + (
-                  currentPositionPnL.isProfit 
-                    ? "bg-emerald-950/40 border-emerald-500/50" 
-                    : "bg-rose-950/40 border-rose-500/50"
-                )}>
-                  <div className="flex justify-between items-center text-slate-400 mb-1">
-                    <span>Net PnL (After Fee):</span>
-                    <span className="text-[10px] text-cyan-300 font-bold">1-SEC FUNDING APPLIED</span>
-                  </div>
-                  <div className={"text-base font-black flex items-center " + (
-                    currentPositionPnL.isProfit ? "text-emerald-400" : "text-rose-400"
-                  )}>
-                    {currentPositionPnL.isProfit ? <ArrowUpRight className="w-4 h-4 mr-0.5" /> : <ArrowDownRight className="w-4 h-4 mr-0.5" />}
-                    {(currentPositionPnL.pnlMon >= 0 ? "+" : "") + currentPositionPnL.pnlMon.toFixed(2)} MON ({currentPositionPnL.pnlPercent.toFixed(1)}%)
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-1 flex justify-between border-t border-purple-900/30 pt-1">
-                    <span>Gross: {(currentPositionPnL.grossPnlMon >= 0 ? "+" : "") + currentPositionPnL.grossPnlMon.toFixed(2)} MON</span>
-                    <span className={"font-bold " + (activePosition.isLong ? "text-rose-400" : "text-emerald-400")}>
-                      Fund: {activePosition.isLong ? "-" : "+"}{blockFundingAccrual.toFixed(4)} MON
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Block Stream Funding Taximeter Ticker (Live Continuous PnL Delta) */}
-              <div className="mt-3 bg-[#08090C] border border-white/[0.08] rounded-lg p-2.5 text-[11px] font-mono flex flex-wrap justify-between items-center text-slate-300">
-                <div className="flex items-center space-x-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-ping" />
-                  <span className="text-[#00FF66] font-bold">Continuous Funding Stream</span>
-                  <span>Rate: <strong className="text-white tabular-nums">{blockFundingRateBps} / block</strong></span>
-                </div>
-                <div className="flex items-center space-x-3 text-[10px]">
-                  <span>Cadence: <strong className="text-[#00FF66]">1.0s Monad Block</strong></span>
-                  <span className="text-white bg-[#00FF66]/10 border border-[#00FF66]/30 px-1.5 py-0.2 rounded font-bold">✓ Continuous Settlement</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowMathModal(true)}
-                    className="text-[#CCFF00] hover:text-white bg-[#CCFF00]/10 hover:bg-[#CCFF00]/20 border border-[#CCFF00]/30 px-2 py-0.5 rounded font-bold transition-colors cursor-pointer flex items-center space-x-1"
-                  >
-                    <span>📐 FORMULA INSPECTOR</span>
-                  </button>
-                  <span className="hidden md:inline text-slate-400">
-                    Vault: 100% Solvent (Zero Bad Debt)
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Standby Card when no position is open (Double-Bezel Monolith Chassis) */
-            <div className="monolith-chassis rounded-2xl p-5 relative overflow-hidden font-mono">
-              <div className="flex flex-wrap justify-between items-center pb-3.5 border-b border-white/[0.08] gap-3">
-                <div className="flex items-center space-x-2.5">
-                  <span className="w-2 h-2 rounded-full bg-[#00F279] animate-ping" />
-                  <span className="text-xs font-black text-white uppercase tracking-wider">
-                    Market Standby • Ready For Dispatch
-                  </span>
-                  <span className="hidden sm:inline-flex text-[10px] font-bold text-[#00F279] bg-[#00F279]/10 px-2.5 py-0.5 rounded-md border border-[#00F279]/30">
-                    VAULT SOLVENT
-                  </span>
-                </div>
-                <div className="flex items-center space-x-3 text-[11px] text-zinc-400">
-                  <span>HOTKEYS: <span className="inline-flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-black text-[10px] text-[#00F279] font-mono font-bold shadow-inner">B</kbd> LONG</span> • <span className="inline-flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-black text-[10px] text-[#FF2A4D] font-mono font-bold shadow-inner">S</kbd> SHORT</span> • <span className="inline-flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-black text-[10px] text-[#CCFF00] font-mono font-bold shadow-inner">1</kbd> 1-CLICK</span></span>
-                  <button
-                    type="button"
-                    onClick={() => setShowMathModal(true)}
-                    className="text-[#CCFF00] hover:text-white bg-[#CCFF00]/10 hover:bg-[#CCFF00]/20 border border-[#CCFF00]/30 px-2 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer flex items-center space-x-1"
-                  >
-                    <span>📐 FORMULA INSPECTOR</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3.5 text-xs">
-                <div className="monolith-core p-3 rounded-xl">
-                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Protocol Vault</div>
-                  <div className="text-sm font-black text-[#00F279] tabular-nums">1,500,000 MON</div>
-                  <div className="text-[10px] text-zinc-500 mt-0.5">100% Solvency</div>
-                </div>
-                <div className="monolith-core p-3 rounded-xl">
-                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Funding Velocity</div>
-                  <div className="text-sm font-black text-zinc-200">1-Second Block</div>
-                  <div className="text-[10px] text-zinc-500 mt-0.5">Continuous skew</div>
-                </div>
-                <div className="monolith-core p-3 rounded-xl">
-                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Assigned Storage</div>
-                  <div className="text-sm font-black text-[#CCFF00] tabular-nums">Shard #{assignedShardId}</div>
-                  <div className="text-[10px] text-zinc-500 mt-0.5">Zero contention</div>
-                </div>
-                <div className="monolith-core p-3 rounded-xl">
-                  <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-1">Execution Track</div>
-                  <div className="text-sm font-black text-white">50ms Sub-Second</div>
-                  <div className="text-[10px] text-[#00F279] mt-0.5 font-bold">0 Popups Active</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 24H Market Range & Liquidity Depth (Double-Bezel Monolith Chassis) */}
-          <div className="monolith-chassis rounded-2xl p-4 font-mono text-xs space-y-3">
-            <div className="flex justify-between items-center text-zinc-300">
-              <div className="flex items-center space-x-2 font-bold text-[#00E5FF] text-xs">
-                <BarChart2 className="w-3.5 h-3.5 text-[#00E5FF]" />
-                <span className="font-black uppercase tracking-wider text-[11px]">24H MARKET RANGE & LIQUIDITY DEPTH</span>
-              </div>
-              <span className="text-[10px] text-zinc-400 bg-white/5 px-2 py-0.5 rounded border border-white/10 font-bold">
-                PYTH HERMES STREAM
-              </span>
-            </div>
-
-            {/* Dynamic 24h Price Range Slider Bar */}
-            <div className="space-y-1.5 monolith-core p-3 rounded-xl">
-              <div className="flex justify-between text-[10px] text-zinc-400 font-medium">
-                <span>24h Low: <strong className="text-white">${marketStats24h.low24h.toFixed(4)}</strong></span>
-                <span>24h High: <strong className="text-white">${marketStats24h.high24h.toFixed(4)}</strong></span>
-              </div>
-              <div className="w-full bg-black/60 h-2 rounded-full overflow-hidden relative border border-white/10">
-                <div 
-                  style={{ width: `${marketStats24h.rangePercent}%` }} 
-                  className="h-full bg-gradient-to-r from-[#00E5FF] to-[#CCFF00] rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(204,255,0,0.4)]"
-                />
-              </div>
-            </div>
-
-            {/* 4-Stat Macro Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-              <div className="monolith-core p-2.5 rounded-xl">
-                <div className="text-zinc-500 text-[10px] font-bold">All-Time High (ATH):</div>
-                <div className="text-[#00F279] font-bold text-xs mt-0.5">${marketStats24h.athPrice.toFixed(4)}</div>
-              </div>
-              <div className="monolith-core p-2.5 rounded-xl">
-                <div className="text-zinc-500 text-[10px] font-bold">Cycle Floor (ATL):</div>
-                <div className="text-[#FF2A4D] font-bold text-xs mt-0.5">${marketStats24h.atlPrice.toFixed(4)}</div>
-              </div>
-              <div className="monolith-core p-2.5 rounded-xl">
-                <div className="text-zinc-500 text-[10px] font-bold">24H Volume (Est):</div>
-                <div className="text-white font-bold text-xs mt-0.5">{marketStats24h.vol24hUSD}</div>
-              </div>
-              <div className="monolith-core p-2.5 rounded-xl">
-                <div className="text-zinc-500 text-[10px] font-bold">Market Sentiment:</div>
-                <div className="text-[#CCFF00] font-bold text-xs mt-0.5">{marketStats24h.longSentiment}% L / {marketStats24h.shortSentiment}% S</div>
-              </div>
-            </div>
-          </div>
+          {/* Real-Time Active Position HUD or Awaiting Order Standby Sentinel & 24H Market Range */}
+          <PositionHUD
+            activePosition={activePosition}
+            isPilotMode={isPilotMode}
+            isSimActive={isSimActive}
+            setIsSimActive={setIsSimActive}
+            handleClosePosition={handleClosePosition}
+            currentPositionPnL={currentPositionPnL}
+            monPrice={monPrice}
+            blockFundingAccrual={blockFundingAccrual}
+            blockFundingRateBps={blockFundingRateBps}
+            setShowMathModal={setShowMathModal}
+            assignedShardId={assignedShardId}
+            marketStats24h={marketStats24h}
+          />
 
 
           {/* S-Tier Monad Block-STM Live Shard Heatmap with Deterministic Trader Shard Highlighting & Sandbox Parallel Stress Simulator */}
@@ -2015,744 +1824,72 @@ export default function FluxGamingTerminal() {
 
         {/* Right Col: Institutional Margin & Leverage Cockpit */}
         <section className="flex flex-col space-y-4">
-          <div className="monolith-chassis rounded-2xl p-5 relative overflow-hidden">
-            <div>
-              <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.08]">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-[#CCFF00]/10 border border-[#CCFF00]/30 flex items-center justify-center">
-                    <Sliders className="w-3.5 h-3.5 text-[#CCFF00]" />
-                  </div>
-                  <div>
-                    <h3 className="font-mono font-black text-xs uppercase tracking-wider text-white">
-                      Order Cockpit • MON-USD
-                    </h3>
-                    <p className="text-[10px] text-zinc-400 font-mono">1.0s Single-Slot Finality</p>
-                  </div>
-                </div>
-                
-                {/* 1-Click Session Key Interactive Switch */}
-                <button
-                  type="button"
-                  onClick={handleToggle1Click}
-                  className={"group flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-[11px] font-mono cursor-pointer transition-all duration-300 " + (
-                    is1ClickTrading 
-                      ? (activeSession?.isLocked 
-                          ? "bg-[#FFB800]/10 border-[#FFB800] text-[#FFB800] shadow-[0_0_15px_rgba(255,184,0,0.25)]"
-                          : "bg-[#00E5FF]/10 border-[#00E5FF] text-[#00E5FF] shadow-[0_0_18px_rgba(0,229,255,0.25)]") 
-                      : "bg-white/[0.03] border-white/10 text-zinc-300 hover:border-[#CCFF00]/60 hover:text-white"
-                  )}
-                  title={is1ClickTrading 
-                    ? (activeSession?.isLocked 
-                        ? "Session Key Locked: Click to unlock with PIN" 
-                        : (isPilotMode 
-                            ? "1-Click Active (Sandbox): 0 MetaMask popups enabled" 
-                            : "1-Click Active (Testnet): Session key active for Monad L1 trades")) 
-                    : "Enable 1-Click Trading Session Key"}
-                >
-                  {is1ClickTrading ? (
-                    activeSession?.isLocked ? (
-                      <Lock className="w-3.5 h-3.5 text-[#FFB800] animate-pulse" />
-                    ) : (
-                      <Zap className="w-3.5 h-3.5 text-[#00E5FF] animate-pulse" />
-                    )
-                  ) : (
-                    <Zap className="w-3.5 h-3.5 text-[#CCFF00] group-hover:scale-110 transition-transform" />
-                  )}
+          <OrderCockpit
+            isPilotMode={isPilotMode}
+            userBalance={userBalance}
+            formatBalance={formatBalance}
+            margin={margin}
+            setMargin={setMargin}
+            marginNum={marginNum}
+            leverage={leverage}
+            setLeverage={setLeverage}
+            notionalSize={notionalSize}
+            monPrice={monPrice}
+            is1ClickTrading={is1ClickTrading}
+            activeSession={activeSession}
+            handleToggle1Click={handleToggle1Click}
+            activePosition={activePosition}
+            isSubmitting={isSubmitting}
+            handleOpenPosition={handleOpenPosition}
+            handleClosePosition={handleClosePosition}
+            currentPositionPnL={currentPositionPnL}
+            isBracketEnabled={isBracketEnabled}
+            setIsBracketEnabled={setIsBracketEnabled}
+            tpPercent={tpPercent}
+            setTpPercent={setTpPercent}
+            slPercent={slPercent}
+            setSlPercent={setSlPercent}
+            bracketTargets={bracketTargets}
+            bufferPercent={bufferPercent}
+            mmrAmount={mmrAmount}
+            marginBuffer={marginBuffer}
+            liqPriceLong={liqPriceLong}
+            liqDistanceLongPct={liqDistanceLongPct}
+            liqPriceShort={liqPriceShort}
+            liqDistanceShortPct={liqDistanceShortPct}
+            feeAmount={feeAmount}
+          />
 
-                  <span className="font-black tracking-tight text-[10px]">
-                    {is1ClickTrading 
-                      ? (activeSession?.isLocked ? "LOCKED" : "1-CLICK ON") 
-                      : "1-CLICK"}
-                  </span>
+          {/* Sandbox Volatility & Liquidation Stress Simulator */}
+          <VolatilityStressTester
+            isPilotMode={isPilotMode}
+            activePosition={activePosition}
+            isSimActive={isSimActive}
+            setIsSimActive={setIsSimActive}
+            simPriceShift={simPriceShift}
+            setSimPriceShift={setSimPriceShift}
+            simBasePrice={simBasePrice}
+            setSimBasePrice={setSimBasePrice}
+            monPrice={monPrice}
+            effectivePrice={effectivePrice}
+            positionHealthFactor={positionHealthFactor}
+            userBalance={userBalance}
+            setSandboxHistory={setSandboxHistory}
+            setActivePosition={setActivePosition}
+            setTxToast={setTxToast}
+          />
 
-                  {/* Visual Toggle Pill Indicator */}
-                  <div className={"w-7 h-3.5 rounded-full p-0.5 flex items-center transition-colors duration-300 " + (
-                    is1ClickTrading
-                      ? (activeSession?.isLocked ? "bg-[#FFB800] justify-end" : "bg-[#00E5FF] justify-end")
-                      : "bg-white/10 justify-start group-hover:bg-white/20"
-                  )}>
-                    <div className={"w-2.5 h-2.5 rounded-full bg-black shadow-md transform transition-transform duration-300 " + (
-                      is1ClickTrading ? "scale-100" : "scale-90 bg-zinc-400"
-                    )} />
-                  </div>
-                </button>
-              </div>
-
-              {/* Collateral Input with Custom Steppers */}
-              <div className="mt-4 monolith-core p-3.5 rounded-xl">
-                <div className="flex justify-between text-[11px] font-mono text-zinc-400 mb-2">
-                  <span className="font-bold uppercase tracking-wider text-[10px]">MARGIN COLLATERAL</span>
-                  <span className="text-[#00E5FF] font-black tabular-nums">BALANCE: {formatBalance(userBalance, 4)} MON</span>
-                </div>
-                <div className="relative flex items-center">
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={margin}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      if (isNaN(val) || val < 0) {
-                        setMargin("1");
-                      } else {
-                        setMargin(e.target.value);
-                      }
-                    }}
-                    className="w-full bg-[#080A0E] border border-white/10 focus:border-[#CCFF00] rounded-xl px-4 py-3 text-xl font-mono text-white font-bold focus:outline-none transition-colors pr-24 shadow-inner"
-                    placeholder="10"
-                  />
-                  <div className="absolute right-3 flex items-center space-x-2">
-                    <span className="text-xs text-[#CCFF00] font-mono font-black pointer-events-none">MON</span>
-                    <div className="flex flex-col border border-white/10 rounded-md overflow-hidden bg-[#121620]">
-                      <button
-                        type="button"
-                        onClick={() => setMargin((prev) => (Math.max(1, (parseFloat(prev) || 0) + 1)).toString())}
-                        className="px-2 py-0.5 text-[9px] hover:bg-[#CCFF00]/20 text-[#CCFF00] transition-colors font-bold cursor-pointer"
-                        title="Increase Margin"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMargin((prev) => (Math.max(1, (parseFloat(prev) || 0) - 1)).toString())}
-                        className="px-2 py-0.5 text-[9px] hover:bg-[#CCFF00]/20 text-[#CCFF00] transition-colors font-bold border-t border-white/10 cursor-pointer"
-                        title="Decrease Margin"
-                      >
-                        ▼
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Collateral Sizing Pills (25%, 50%, 75%, MAX) */}
-                <div className="grid grid-cols-4 gap-2 mt-2.5 font-mono text-[11px]">
-                  {[
-                    { label: "25%", pct: 0.25 },
-                    { label: "50%", pct: 0.50 },
-                    { label: "75%", pct: 0.75 },
-                    { label: "MAX", pct: 1.00 }
-                  ].map(({ label, pct }) => (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={() => {
-                        if (userBalance <= 0) {
-                          setMargin("0.1");
-                          return;
-                        }
-                        let calculated;
-                        if (pct === 1.00) {
-                          // For MAX: In testnet reserve a safe gas buffer (0.05 MON) so user always has gas to settle/close payouts;
-                          // In sandbox or testnet, strictly FLOOR down so it never exceeds userBalance!
-                          const maxAvailable = isPilotMode 
-                            ? userBalance 
-                            : Math.max(0.01, userBalance - 0.05);
-                          // Floor down to 2 decimal places to avoid floating point overshoot
-                          calculated = Math.max(0.01, Math.floor(maxAvailable * 100) / 100);
-                        } else {
-                          // For percentage sizing on testnet, leave proportional gas headroom
-                          const base = isPilotMode ? userBalance : Math.max(0, userBalance - 0.03);
-                          calculated = Math.max(0.1, Math.floor(base * pct * 100) / 100);
-                        }
-                        setMargin(calculated.toString());
-                      }}
-                      className="py-1.5 rounded-lg bg-white/[0.04] hover:bg-[#CCFF00]/10 border border-white/[0.08] hover:border-[#CCFF00]/50 text-zinc-300 hover:text-white font-bold transition-all text-center active:scale-95 cursor-pointer"
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Leverage Multiplier Calibrated Slider */}
-              <div className="mt-4 monolith-core p-3.5 rounded-xl">
-                <div className="flex justify-between items-center text-xs font-mono mb-2">
-                  <span className="text-zinc-400 font-bold uppercase tracking-wider text-[10px]">LEVERAGE MULTIPLIER</span>
-                  <span className="font-black text-[#CCFF00] text-base tabular-nums">{leverage}x</span>
-                </div>
-                <input
-                  type="range"
-                  min="1.1"
-                  max="50"
-                  step="0.5"
-                  value={leverage}
-                  onChange={(e) => setLeverage(parseFloat(e.target.value))}
-                  className="w-full accent-[#CCFF00] cursor-pointer h-2 bg-black/60 rounded-lg border border-white/5"
-                />
-                <div className="grid grid-cols-5 gap-1 text-xs text-zinc-400 mt-2.5 font-mono">
-                  {[2, 5, 10, 25, 50].map((val) => (
-                    <button
-                      key={val}
-                      onClick={() => setLeverage(val)}
-                      className={"py-1 rounded-md border text-center font-bold transition-all cursor-pointer " + (
-                        leverage === val 
-                          ? "border-[#CCFF00] text-black bg-[#CCFF00] font-black shadow-sm" 
-                          : "border-white/[0.08] bg-white/[0.02] hover:border-white/20 hover:text-white"
-                      )}
-                    >
-                      {val}x
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Primary Instant Order Dispatch Buttons or Direct Close Trigger */}
-              <div className="mt-4 space-y-2.5">
-                {activePosition ? (
-                  /* Immediate Cockpit Close & Settle Button (ZERO SCROLL NEEDED) */
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={handleClosePosition}
-                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-[#FF2A4D] hover:brightness-110 font-mono font-black text-sm text-white flex items-center justify-between px-5 active:scale-[0.98] transition-all disabled:opacity-40 cursor-pointer shadow-[0_8px_24px_-4px_rgba(255,42,77,0.5)] group border border-rose-400/30"
-                      title="Instantly close active position and settle PnL to wallet [Hotkey: C]"
-                    >
-                      <div className="flex items-center space-x-2.5">
-                        <div className="w-6 h-6 rounded-md bg-black/30 flex items-center justify-center">
-                          <XCircle className="w-4 h-4 text-white" />
-                        </div>
-                        <span className="tracking-wide">CLOSE & SETTLE PAYOUT</span>
-                        <kbd className="text-[10px] bg-black text-rose-300 px-2 py-0.5 rounded font-mono font-black shadow-inner border border-rose-400/30">
-                          C
-                        </kbd>
-                      </div>
-                      <span className="text-[10px] font-mono bg-black/30 px-2.5 py-1 rounded-md font-black tabular-nums border border-white/10">
-                        {currentPositionPnL.isProfit ? "+" : ""}{currentPositionPnL.pnlMon.toFixed(2)} MON
-                      </span>
-                    </button>
-                    <p className="text-[10px] font-mono text-zinc-400 text-center">
-                      Position Active: <strong className={activePosition.isLong ? "text-[#00F279]" : "text-[#FF2A4D]"}>{activePosition.isLong ? "LONG" : "SHORT"} {activePosition.leverage}x</strong> • Click above or press <kbd className="text-zinc-300 font-bold">C</kbd> to exit.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      disabled={isSubmitting || marginNum <= 0}
-                      onClick={() => handleOpenPosition(true)}
-                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00D96C] to-[#00F279] hover:brightness-110 font-mono font-black text-sm text-black flex items-center justify-between px-5 active:scale-[0.98] transition-all disabled:opacity-40 cursor-pointer shadow-[0_8px_20px_-4px_rgba(0,242,121,0.4)] group"
-                    >
-                      <div className="flex items-center space-x-2.5">
-                        <div className="w-6 h-6 rounded-md bg-black/20 flex items-center justify-center">
-                          <TrendingUp className="w-3.5 h-3.5 text-black" />
-                        </div>
-                        <span>BUY / LONG {leverage}x</span>
-                        <kbd className="text-[10px] bg-black text-[#00F279] px-2 py-0.5 rounded font-mono font-black shadow-inner">
-                          B
-                        </kbd>
-                      </div>
-                      <span className="text-[10px] font-mono bg-black/20 px-2.5 py-1 rounded-md font-black tabular-nums border border-black/10">
-                        1.0s MONAD TX
-                      </span>
-                    </button>
-
-                    <button
-                      disabled={isSubmitting || marginNum <= 0}
-                      onClick={() => handleOpenPosition(false)}
-                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#E6193C] to-[#FF2A4D] hover:brightness-110 font-mono font-black text-sm text-white flex items-center justify-between px-5 active:scale-[0.98] transition-all disabled:opacity-40 cursor-pointer shadow-[0_8px_20px_-4px_rgba(255,42,77,0.4)] group"
-                    >
-                      <div className="flex items-center space-x-2.5">
-                        <div className="w-6 h-6 rounded-md bg-black/30 flex items-center justify-center">
-                          <TrendingDown className="w-3.5 h-3.5 text-white" />
-                        </div>
-                        <span>SELL / SHORT {leverage}x</span>
-                        <kbd className="text-[10px] bg-black text-[#FF2A4D] px-2 py-0.5 rounded font-mono font-black shadow-inner">
-                          S
-                        </kbd>
-                      </div>
-                      <span className="text-[10px] font-mono bg-black/30 px-2.5 py-1 rounded-md font-black tabular-nums border border-white/10">
-                        1.0s MONAD TX
-                      </span>
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {/* Smart Bracket Controls (TP / SL Guard) */}
-              <div className="mt-4 monolith-core rounded-xl p-3.5 space-y-3 font-mono text-xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Crosshair className="w-4 h-4 text-[#CCFF00]" />
-                    <span className="font-bold text-white tracking-wide uppercase text-[11px]">
-                      SMART BRACKET (TP / SL GUARD)
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsBracketEnabled(!isBracketEnabled)}
-                    role="switch"
-                    aria-checked={isBracketEnabled}
-                    className={"group flex items-center gap-2 px-2 py-1 rounded-lg border font-mono text-[10px] font-bold tracking-wider transition-all cursor-pointer select-none active:scale-95 " + (
-                      isBracketEnabled 
-                        ? "bg-[#CCFF00]/10 border-[#CCFF00]/40 text-[#CCFF00] hover:border-[#CCFF00]/70 hover:bg-[#CCFF00]/15" 
-                        : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-zinc-200 hover:border-white/20"
-                    )}
-                    title={isBracketEnabled ? "Click to disarm Smart Bracket" : "Click to arm Take Profit / Stop Loss bracket guard"}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <span className={"w-1.5 h-1.5 rounded-full transition-colors " + (
-                        isBracketEnabled ? "bg-[#CCFF00] shadow-[0_0_6px_#CCFF00] animate-pulse" : "bg-zinc-600"
-                      )} />
-                      <span className="text-[9.5px] uppercase font-black">
-                        {isBracketEnabled ? "ARMED" : "OFF"}
-                      </span>
-                    </span>
-
-                    {/* Tactile Hardware Toggle Switch Pill */}
-                    <div 
-                      className={"w-7 h-4 rounded-full p-0.5 transition-colors flex items-center " + (
-                        isBracketEnabled ? "bg-[#CCFF00]" : "bg-zinc-700/80 group-hover:bg-zinc-600"
-                      )}
-                    >
-                      <div 
-                        className={"w-3 h-3 rounded-full bg-black shadow-sm transition-transform duration-200 ease-out " + (
-                          isBracketEnabled ? "translate-x-3" : "translate-x-0"
-                        )} 
-                      />
-                    </div>
-                  </button>
-                </div>
-
-                {isBracketEnabled && (
-                  <div className="space-y-3 pt-2 border-t border-white/[0.06]">
-                    {/* Take Profit Setting */}
-                    <div>
-                      <div className="flex justify-between text-[11px] mb-1">
-                        <span className="text-slate-400">Target Profit (TP):</span>
-                        <span className="text-[#00FF66] font-bold tabular-nums">
-                          +{tpPercent}% (+{bracketTargets.estimatedTpPnlMon} MON / +${bracketTargets.estimatedTpPnlUSD})
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-4 gap-1.5 text-[10px]">
-                        {[25, 50, 75, 100].map((val) => (
-                          <button
-                            key={val}
-                            type="button"
-                            onClick={() => setTpPercent(val)}
-                            className={"py-1 rounded border text-center transition-colors font-bold " + (
-                              tpPercent === val 
-                                ? "bg-[#00FF66]/10 border-[#00FF66] text-[#00FF66]" 
-                                : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
-                            )}
-                          >
-                            +{val}%
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Stop Loss Guard Setting */}
-                    <div>
-                      <div className="flex justify-between text-[11px] mb-1">
-                        <span className="text-slate-400">Stop Loss Guard (SL):</span>
-                        <span className="text-rose-400 font-bold tabular-nums">
-                          -{slPercent}% (-{bracketTargets.estimatedSlPnlMon} MON / -${bracketTargets.estimatedSlPnlUSD})
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-4 gap-1.5 text-[10px]">
-                        {[10, 20, 30, 40].map((val) => (
-                          <button
-                            key={val}
-                            type="button"
-                            onClick={() => setSlPercent(val)}
-                            className={"py-1 rounded border text-center transition-colors font-bold " + (
-                              slPercent === val 
-                                ? "bg-rose-500/10 border-rose-500 text-rose-400" 
-                                : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
-                            )}
-                          >
-                            -{val}%
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Bracket Price Projections Table */}
-                    <div className="bg-[#141722] p-2.5 rounded-lg border border-white/[0.04] space-y-1 text-[10px]">
-                      <div className="flex justify-between text-slate-300">
-                        <span>Long Target TP:</span>
-                        <strong className="text-[#00FF66] font-mono tabular-nums">${bracketTargets.longTpPrice.toFixed(4)}</strong>
-                      </div>
-                      <div className="flex justify-between text-slate-300">
-                        <span>Long Guard SL:</span>
-                        <strong className="text-rose-400 font-mono tabular-nums">${bracketTargets.longSlPrice.toFixed(4)}</strong>
-                      </div>
-                      <div className="flex justify-between text-slate-400 pt-1 border-t border-white/[0.04]">
-                        <span>Risk/Reward Ratio:</span>
-                        <strong className="text-white font-mono">1 : {(tpPercent / Math.max(1, slPercent)).toFixed(2)}</strong>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Institutional Margin & Safety Diagnostic Card */}
-              <div className="mt-4 bg-[#0C0E15] rounded-xl p-3.5 space-y-2.5 text-xs font-mono border border-white/[0.08]">
-                <div className="flex justify-between items-center pb-2 border-b border-white/[0.06]">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    INSTITUTIONAL MARGIN & SAFETY PRE-FLIGHT
-                  </span>
-                  <span className={"text-[10px] font-bold px-1.5 py-0.5 rounded border " + (
-                    bufferPercent > 40 
-                      ? "text-[#00FF66] bg-[#00FF66]/10 border-[#00FF66]/30" 
-                      : bufferPercent > 20 
-                        ? "text-amber-400 bg-amber-950/40 border-amber-500/30" 
-                        : "text-rose-400 bg-rose-950/40 border-rose-500/30"
-                  )}>
-                    {bufferPercent > 40 ? "SAFE" : bufferPercent > 20 ? "MODERATE" : "HIGH LEV"}
-                  </span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Position Notional:</span>
-                  <span className="font-bold text-white tabular-nums">{"$" + (notionalSize * monPrice).toFixed(2) + " USD"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Maintenance Margin (2% MMR):</span>
-                  <span className="font-bold text-amber-300 tabular-nums">{mmrAmount.toFixed(4)} MON</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Free Margin Buffer:</span>
-                  <span className="font-bold text-[#00FF66] tabular-nums">+{marginBuffer.toFixed(4)} MON ({bufferPercent.toFixed(1)}%)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Est. Liq Price (Long):</span>
-                  <span className="font-bold text-emerald-400 tabular-nums">
-                    {"$" + liqPriceLong.toFixed(4)} <span className="text-[10px] text-slate-400">(-{liqDistanceLongPct.toFixed(1)}%)</span>
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Est. Liq Price (Short):</span>
-                  <span className="font-bold text-rose-400 tabular-nums">
-                    {"$" + liqPriceShort.toFixed(4)} <span className="text-[10px] text-slate-400">(+{liqDistanceShortPct.toFixed(1)}%)</span>
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Protocol Fee (0.08%):</span>
-                  <span className="text-slate-300 tabular-nums">{feeAmount.toFixed(4)} MON</span>
-                </div>
-                <div className="flex justify-between pt-1 border-t border-white/[0.06]">
-                  <span className="text-slate-400">Est. Monad L1 Gas:</span>
-                  <span className="text-[#CCFF00] font-bold tabular-nums">~0.002 MON (&lt; $0.01)</span>
-                </div>
-              </div>
-
-            </div>
-
-            {/* === S-TIER ADDITION 3: Sandbox Volatility & Liquidation Stress Simulator === */}
-            {isPilotMode && activePosition && (
-              <div className="mt-4 bg-[#07011D] border border-amber-500/40 rounded-2xl p-4 space-y-3 shadow-[0_0_20px_rgba(245,158,11,0.15)]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-amber-300 font-mono font-bold text-xs">
-                    <ShieldAlert className="w-4 h-4 text-amber-400" />
-                    <span>SANDBOX STRESS TESTER</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isSimActive) {
-                        setSimBasePrice(monPrice);
-                        setSimPriceShift(0);
-                      }
-                      setIsSimActive(!isSimActive);
-                    }}
-                    className={"px-2.5 py-1 rounded-lg text-[10px] font-mono font-black border transition-all " + (
-                      isSimActive
-                        ? "bg-amber-950 border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.3)]"
-                        : "bg-[#0C0626] border-purple-500/40 text-purple-300 hover:border-amber-400"
-                    )}
-                  >
-                    {isSimActive ? "⏹ EXIT SIM" : "▶ TEST VOLATILITY"}
-                  </button>
-                </div>
-
-                {isSimActive && (
-                  <div className="space-y-3 pt-1 border-t border-purple-900/40">
-                    <div>
-                      <div className="flex justify-between text-[11px] font-mono text-slate-400 mb-1">
-                        <span>ORACLE PRICE SHIFT:</span>
-                        <span className={"font-bold " + (
-                          simPriceShift > 0 ? "text-emerald-400" : simPriceShift < 0 ? "text-rose-400" : "text-slate-300"
-                        )}>
-                          {simPriceShift >= 0 ? "+" : ""}{simPriceShift}% → ${effectivePrice.toFixed(4)}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="-40"
-                        max="40"
-                        step="1"
-                        value={simPriceShift}
-                        onChange={(e) => setSimPriceShift(parseFloat(e.target.value))}
-                        className="w-full accent-amber-400 h-2 bg-[#090320] rounded-lg cursor-pointer"
-                      />
-                      <div className="flex justify-between text-[9px] font-mono text-slate-500 mt-1">
-                        <span>-40% FLASH CRASH</span>
-                        <span>0%</span>
-                        <span>+40% PUMP</span>
-                      </div>
-                    </div>
-
-                    {/* Preset Shift Buttons */}
-                    <div className="grid grid-cols-5 gap-1 font-mono text-[9px]">
-                      {[-25, -10, 0, 10, 25].map((shiftVal) => (
-                        <button
-                          key={shiftVal}
-                          type="button"
-                          onClick={() => setSimPriceShift(shiftVal)}
-                          className={"py-1 rounded border text-center transition-colors " + (
-                            simPriceShift === shiftVal
-                              ? "bg-amber-900/60 border-amber-400 text-amber-300 font-bold"
-                              : "bg-[#090320] border-purple-900/40 text-slate-400 hover:text-white"
-                          )}
-                        >
-                          {shiftVal >= 0 ? "+" : ""}{shiftVal}%
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Margin Health Bar */}
-                    {positionHealthFactor && (
-                      <div className="space-y-1.5 pt-1">
-                        <div className="flex justify-between text-[10px] font-mono">
-                          <span className="text-slate-400">MARGIN HEALTH:</span>
-                          <span className={"font-bold " + (
-                            positionHealthFactor.isLiquidable 
-                              ? "text-rose-400 animate-pulse" 
-                              : positionHealthFactor.healthPercent < 35 
-                                ? "text-amber-400" 
-                                : "text-emerald-400"
-                          )}>
-                            {positionHealthFactor.isLiquidable ? "⚠ LIQUIDATION RISK (BREACH)" : `${positionHealthFactor.healthPercent}% HEALTHY`}
-                          </span>
-                        </div>
-                        <div className="w-full bg-[#08021C] rounded-full h-2.5 border border-purple-900/40 overflow-hidden">
-                          <div
-                            style={{ width: `${Math.min(100, Math.max(5, positionHealthFactor.healthPercent))}%` }}
-                            className={"h-full rounded-full transition-all duration-200 " + (
-                              positionHealthFactor.isLiquidable 
-                                ? "bg-rose-500 animate-pulse" 
-                                : positionHealthFactor.healthPercent < 35 
-                                  ? "bg-amber-500" 
-                                  : "bg-emerald-500"
-                            )}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Trigger Sandbox Liquidation */}
-                    {positionHealthFactor?.isLiquidable && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // Clean sandbox liquidation trigger
-                          const bounty = +(activePosition.margin * 0.05).toFixed(4);
-                          const liqHistoryEntry = {
-                            id: activePosition.epochId,
-                            txHash: null,
-                            type: activePosition.isLong ? "LONG (LIQ)" : "SHORT (LIQ)",
-                            leverage: activePosition.leverage,
-                            margin: activePosition.margin,
-                            entryPrice: activePosition.entryPrice,
-                            exitPrice: effectivePrice,
-                            funding: -(
-                              (activePosition.margin * activePosition.leverage * 0.000024) *
-                              Math.max(1, (Date.now() - (activePosition.startTime || Date.now())) / 1000)
-                            ).toFixed(4),
-                            pnl: -activePosition.margin,
-                            pnlPercent: "-100.0%",
-                            isWin: false,
-                            balanceBefore: activePosition.balanceBefore != null ? +activePosition.balanceBefore.toFixed(4) : +userBalance.toFixed(4),
-                            balanceAfter: +userBalance.toFixed(4),
-                            fee: activePosition.fee ? +activePosition.fee.toFixed(4) : +(activePosition.margin * activePosition.leverage * 0.0008).toFixed(4),
-                            gasFee: "< 0.002",
-                            time: "Just now"
-                          };
-
-                          setSandboxHistory((prev) => {
-                            const updated = [liqHistoryEntry, ...prev.slice(0, 9)];
-                            if (typeof window !== "undefined") {
-                              localStorage.setItem("flux_sandbox_history", JSON.stringify(updated));
-                            }
-                            return updated;
-                          });
-
-                          setTxToast({
-                            title: "⚡ KEEPER LIQUIDATION EXECUTED",
-                            amount: `Keeper Bounty: +${bounty} MON`,
-                            detail: "Breached 2% MMR — Settled to Sandbox Ledger",
-                            type: "CLOSE",
-                            isWin: false
-                          });
-                          setActivePosition(null);
-                          setIsSimActive(false);
-                          setSimPriceShift(0);
-                          setSimBasePrice(null);
-                          setTimeout(() => setTxToast(null), 5000);
-                        }}
-                        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:from-rose-500 hover:to-red-500 font-mono font-black text-xs text-white shadow-lg shadow-rose-600/50 animate-pulse active:scale-95 transition-all"
-                      >
-                        ⚡ SIMULATE KEEPER LIQUIDATION
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-          </div>
-
-          {/* MonadScan Keeper Sentinel Telemetry Drawer (Positioned in Right Column where it can expand naturally) */}
-          <div className="bg-[#11131A] border border-cyan-500/20 rounded-2xl overflow-hidden text-xs font-mono">
-            <button
-              type="button"
-              onClick={() => setShowKeeperDrawer(!showKeeperDrawer)}
-              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-cyan-950/20 transition-colors"
-            >
-              <div className="flex items-center space-x-2 text-cyan-300 font-bold">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
-                </span>
-                <span className="text-[11px]">KEEPER SENTINEL (MONADSCAN VERIFIED)</span>
-              </div>
-              <div className="flex items-center space-x-1.5 text-slate-400 text-[10px]">
-                <span className={"font-bold px-1.5 py-0.5 rounded border " + (
-                  isPilotMode 
-                    ? "text-[#FFB800] bg-[#FFB800]/10 border-[#FFB800]/30" 
-                    : "text-[#00FF66] bg-[#00FF66]/10 border-[#00FF66]/30"
-                )}>
-                  {isPilotMode ? "SANDBOX SIM" : "🟢 SENTINEL ACTIVE (1s DRIFT)"}
-                </span>
-                <ChevronDown className={"w-3.5 h-3.5 transition-transform " + (showKeeperDrawer ? "rotate-180" : "")} />
-              </div>
-            </button>
-
-            {showKeeperDrawer && (
-              <div className="px-4 pb-3 space-y-2 border-t border-white/[0.06] pt-2.5">
-                <div className="text-[11px] text-slate-300 mb-1 flex justify-between items-center bg-[#070318] px-3 py-1.5 rounded-lg border border-cyan-500/20">
-                  <span className="font-medium">Sentinel Address: <strong className="text-white">0xf163...def15</strong></span>
-                  <a
-                    href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-cyan-300 hover:text-white flex items-center gap-1 font-bold"
-                  >
-                    <span>Contract Logs</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-                {keeperTxFeed.map((tx, idx) => (
-                  <div key={idx} className="flex items-center justify-between bg-[#0C0E15] rounded-xl px-3 py-2 border border-white/[0.06] text-xs">
-                    <div>
-                      <div className="font-bold text-cyan-300 text-xs">{tx.method}</div>
-                      <div className="text-slate-400 text-[11px] mt-0.5">Block #{tx.blockNumber} • {tx.age}</div>
-                    </div>
-                    <a
-                      href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5"
-                      target="_blank"
-                      rel="noreferrer"
-                      title="View verified checkpoint transactions on MonadScan"
-                      className="flex items-center space-x-1 text-purple-300 hover:text-cyan-300 transition-colors font-mono font-bold text-xs"
-                    >
-                      <span>{tx.hash}</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                ))}
-
-                {/* Public Decentralized Keeper Fallback Dispatch */}
-                <div className="pt-2 border-t border-white/[0.06]">
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={async () => {
-                      if (isPilotMode) {
-                        setTxToast({
-                          title: "⚡ KEEPER CHECKPOINT TRIGGERED",
-                          amount: "Block Micro-Pulse",
-                          detail: "Simulated 1.0s Monad Block Checkpoint Settled",
-                          type: "CLOSE",
-                          isWin: true
-                        });
-                        setTimeout(() => setTxToast(null), 4000);
-                        return;
-                      }
-
-                      try {
-                        setIsSubmitting(true);
-                        const walletClient = getWalletClient();
-                        const publicClient = getPublicClient();
-
-                        if (!walletClient || !walletAddress) {
-                          setTxToast({
-                            title: "WALLET REQUIRED",
-                            amount: "Connect Monad Wallet",
-                            detail: "Please connect your wallet to trigger manual keeper pulse.",
-                            type: "CLOSE",
-                            isWin: false
-                          });
-                          setIsSubmitting(false);
-                          setTimeout(() => setTxToast(null), 4000);
-                          return;
-                        }
-
-                        setTxToast({
-                          title: "DISPATCHING KEEPER PULSE",
-                          amount: "checkpointFundingRate()",
-                          detail: "Confirm transaction in MetaMask to execute onchain...",
-                          type: "CLOSE",
-                          isWin: true
-                        });
-
-                        const hash = await walletClient.writeContract({
-                          address: CONTRACT_ADDRESSES.market,
-                          abi: FLUX_MARKET_ABI,
-                          functionName: "checkpointFundingRate",
-                          account: walletAddress
-                        });
-
-                        setTxToast({
-                          title: "⚡ KEEPER CHECKPOINT EXECUTED",
-                          amount: "Monad Block Settled",
-                          detail: `Tx: ${hash.slice(0, 10)}... (Verified on MonadScan)`,
-                          type: "CLOSE",
-                          isWin: true
-                        });
-
-                        await publicClient.waitForTransactionReceipt({ hash });
-                        setIsSubmitting(false);
-                        setTimeout(() => setTxToast(null), 5000);
-                      } catch (err) {
-                        console.warn("Checkpoint trigger error:", err);
-                        setIsSubmitting(false);
-                        const isCooldown = err.message && err.message.includes("Already checkpointed");
-                        const isRejected = err.message && err.message.includes("User rejected");
-                        setTxToast({
-                          title: isCooldown ? "ANTI-SANDWICH COOLDOWN" : (isRejected ? "PULSE CANCELLED" : "CHECKPOINT REVERTED"),
-                          amount: isCooldown ? "1 Checkpoint / Block Max" : "Action Cancelled",
-                          detail: isCooldown 
-                            ? "Anti-sandwich protection active: already settled in this block." 
-                            : (isRejected ? "Transaction cancelled in wallet." : "Failed to broadcast checkpoint pulse."),
-                          type: "CLOSE",
-                          isWin: false
-                        });
-                        setTimeout(() => setTxToast(null), 5000);
-                      }
-                    }}
-                    className="w-full py-2.5 rounded bg-[#161A24] hover:bg-[#1E2330] border border-white/20 font-mono font-bold text-xs text-[#CCFF00] hover:text-white flex items-center justify-center space-x-2 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-[#CCFF00]" />
-                    <span>⚡ FORCE KEEPER HEARTBEAT (PUBLIC DISPATCH)</span>
-                  </button>
-                  <p className="text-[10px] text-slate-400 text-center mt-1 font-mono">
-                    Censorship-resistant fallback — any judge or wallet can settle continuous funding directly on Monad.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+          {/* MonadScan Keeper Sentinel Telemetry Drawer */}
+          <KeeperSentinelDrawer
+            showKeeperDrawer={showKeeperDrawer}
+            setShowKeeperDrawer={setShowKeeperDrawer}
+            isPilotMode={isPilotMode}
+            keeperTxFeed={keeperTxFeed}
+            isSubmitting={isSubmitting}
+            setIsSubmitting={setIsSubmitting}
+            walletAddress={walletAddress}
+            setTxToast={setTxToast}
+          />
         </section>
 
         {/* Full-Width Verified Onchain Settlement History Ledger (Spans all 3 columns) */}
@@ -2977,882 +2114,82 @@ export default function FluxGamingTerminal() {
       )}
 
       {/* 1-Click Session Setup & Management Modal */}
-      {showSessionModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[10000]">
-          <div className="bg-[#0E1015] border border-white/20 rounded-xl p-6 sm:p-7 max-w-lg w-full shadow-2xl space-y-5 font-mono">
-            
-            <div className="flex items-start justify-between border-b border-white/[0.08] pb-3.5">
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded bg-white/5 border border-white/10 flex items-center justify-center">
-                  <Zap className="w-4 h-4 text-[#CCFF00]" />
-                </div>
-                <div>
-                  <h3 className="font-mono font-bold text-sm text-white uppercase tracking-wider">
-                    {is1ClickTrading && activeSession ? "Manage 1-Click Session" : "Enable 1-Click Trading"}
-                  </h3>
-                  <p className="text-[11px] font-mono text-slate-400">Zero MetaMask Popups • 50ms High-Frequency Trades</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowSessionModal(false)}
-                className="text-slate-500 hover:text-white transition-colors"
-              >
-                <XCircle className="w-6 h-6" />
-              </button>
-            </div>
+      <SessionModal
+        show={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        is1ClickTrading={is1ClickTrading}
+        activeSession={activeSession}
+        sessionStorageType={sessionStorageType}
+        setSessionStorageType={setSessionStorageType}
+        sessionPinInput={sessionPinInput}
+        setSessionPinInput={setSessionPinInput}
+        isSubmitting={isSubmitting}
+        onAuthorizeSession={handleAuthorizeSession}
+        onLockSession={() => {
+          if (activeSession?.pinHash) {
+            lockActiveSession();
+            setActiveSession((prev) => prev ? { ...prev, isLocked: true } : null);
+            setShowSessionModal(false);
+            setShowUnlockModal(true);
+          } else {
+            handleRevokeSession();
+          }
+        }}
+        onRevokeSession={handleRevokeSession}
+      />
 
-            {is1ClickTrading && activeSession ? (
-              // Active Session Management View
-              <div className="space-y-4">
-                <div className="bg-[#070318] p-4 rounded-2xl border border-emerald-500/30 font-mono text-xs space-y-2">
-                  <div className="flex justify-between items-center text-emerald-400 font-bold">
-                    <span>STATUS: ACTIVE & READY</span>
-                    <span className="text-[10px] bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/40">ONLINE</span>
-                  </div>
-                  <div className="text-slate-400">
-                    Storage: <span className="text-white font-bold">{activeSession.storageType === "local" ? "Persistent 24-Hour (LocalStorage)" : "Single-Window (SessionStorage)"}</span>
-                  </div>
-                  <div className="text-slate-400">
-                    Session Key: <span className="text-cyan-300 font-bold">{activeSession.sessionAddress.slice(0, 10)}...{activeSession.sessionAddress.slice(-6)}</span>
-                  </div>
-                </div>
+      {/* Terminal Lock & Inactivity Overlays */}
+      <UnlockModal
+        showUnlockModal={showUnlockModal}
+        isTerminalLocked={isTerminalLocked}
+        showSessionExpiredModal={showSessionExpiredModal}
+        activeSession={activeSession}
+        unlockPinInput={unlockPinInput}
+        setUnlockPinInput={setUnlockPinInput}
+        unlockError={unlockError}
+        unlockLockedUntil={unlockLockedUntil}
+        walletAddress={walletAddress}
+        onUnlockSession={handleUnlockSession}
+        onRevokeSession={handleRevokeSession}
+        onReauthorizeSession={() => {
+          handleRevokeSession();
+          setShowSessionModal(true);
+        }}
+        onResumeTerminal={() => setIsTerminalLocked(false)}
+        onDisconnectWallet={() => {
+          setIsTerminalLocked(false);
+          handleDisconnectWallet();
+        }}
+        onCloseSessionExpired={() => setShowSessionExpiredModal(false)}
+        onReenable1Click={() => {
+          setShowSessionExpiredModal(false);
+          setShowSessionModal(true);
+        }}
+      />
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      if (activeSession.pinHash) {
-                        lockActiveSession();
-                        setActiveSession((prev) => prev ? { ...prev, isLocked: true } : null);
-                        setShowSessionModal(false);
-                        setShowUnlockModal(true);
-                      } else {
-                        // Single-window mode has no PIN: locking immediately wipes session
-                        handleRevokeSession();
-                      }
-                    }}
-                    className="flex-1 py-3 rounded-xl bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/40 text-amber-300 font-mono text-xs font-bold transition-all flex items-center justify-center space-x-2"
-                  >
-                    <Lock className="w-4 h-4" />
-                    <span>{activeSession.pinHash ? "LOCK NOW" : "LOCK & CLEAR"}</span>
-                  </button>
+      {/* Protocol Specification Dossier Guide Modal */}
+      <GuideModal
+        show={showGuideModal}
+        onClose={() => setShowGuideModal(false)}
+        isPilotMode={isPilotMode}
+        setIsPilotMode={setIsPilotMode}
+      />
 
-                  <button
-                    onClick={handleRevokeSession}
-                    className="flex-1 py-3 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 text-rose-300 font-mono text-xs font-bold transition-all flex items-center justify-center space-x-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>REVOKE SESSION</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              // New Session Setup View
-              <div className="space-y-5">
-                <div className="bg-[#070318] p-4 rounded-2xl border border-cyan-500/20 font-mono text-xs space-y-3">
-                  <div className="flex items-center space-x-2 text-cyan-300 font-bold">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span>SESSION KEY ARCHITECTURE & EXECUTION</span>
-                  </div>
-                  <p className="text-slate-300 leading-relaxed text-[11px]">
-                    You sign <strong>once</strong> in MetaMask to approve an ephemeral session trading keypair.
-                  </p>
-                  
-                  {/* Clear Environment Execution Modes */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] pt-1">
-                    <div className="p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300">
-                      <div className="font-bold flex items-center space-x-1">
-                        <span>⚡ JUDGE PILOT SANDBOX</span>
-                      </div>
-                      <p className="text-slate-400 mt-0.5">Instant 50ms sub-second execution with <strong>0 MetaMask popups</strong>.</p>
-                    </div>
+      {/* Institutional PnL Settlement Slip Modal */}
+      <SettlementSlipModal
+        trade={selectedSlipTrade}
+        onClose={() => {
+          setSelectedSlipTrade(null);
+          setCopiedSlip(false);
+        }}
+      />
 
-                    <div className="p-2 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-cyan-300">
-                      <div className="font-bold flex items-center space-x-1">
-                        <span>🛡️ MONAD TESTNET (L1)</span>
-                      </div>
-                      <p className="text-slate-400 mt-0.5">Non-custodial smart contract: transfers live MON collateral directly from your wallet.</p>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-purple-900/30 pt-2 text-[10px] text-emerald-400 flex items-center space-x-1.5">
-                    <span>🛡️</span>
-                    <span>Zero-Withdrawal Guarantee: Session keys can only place & close trades. They have 0 power to move or withdraw funds.</span>
-                  </div>
-                </div>
-
-                {/* Storage Mode Selection */}
-                <div className="space-y-2">
-                  <label className="text-xs font-mono font-bold text-slate-300">SESSION PERSISTENCE</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div 
-                      onClick={() => setSessionStorageType("local")}
-                      className={"p-3.5 rounded-xl border font-mono text-xs cursor-pointer transition-all " + (
-                        sessionStorageType === "local" 
-                          ? "bg-purple-950/70 border-cyan-400 text-white shadow-[0_0_15px_rgba(6,182,212,0.2)]" 
-                          : "bg-[#070318] border-purple-900/40 text-slate-400"
-                      )}
-                    >
-                      <div className="font-bold flex items-center space-x-1.5">
-                        <span>● Remember 24 Hours</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">Persists across window close. 15-min idle auto-lock.</p>
-                    </div>
-
-                    <div 
-                      onClick={() => setSessionStorageType("session")}
-                      className={"p-3.5 rounded-xl border font-mono text-xs cursor-pointer transition-all " + (
-                        sessionStorageType === "session" 
-                          ? "bg-purple-950/70 border-cyan-400 text-white shadow-[0_0_15px_rgba(6,182,212,0.2)]" 
-                          : "bg-[#070318] border-purple-900/40 text-slate-400"
-                      )}
-                    >
-                      <div className="font-bold flex items-center space-x-1.5">
-                        <span>● Single-Window</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">Key is destroyed immediately when tab or window is closed.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Optional Quick-PIN for 24h storage */}
-                {sessionStorageType === "local" && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs font-mono">
-                      <span className="text-slate-300 font-bold">OPTIONAL QUICK-PIN (RECOMMENDED)</span>
-                      <span className="text-[10px] text-slate-500">Auto-lock defense</span>
-                    </div>
-                    <input
-                      type="password"
-                      maxLength={6}
-                      value={sessionPinInput}
-                      onChange={(e) => setSessionPinInput(e.target.value)}
-                      placeholder="Enter 4-digit PIN to lock session against intruders"
-                      className="w-full bg-[#08021C] border border-purple-900/50 focus:border-cyan-400 rounded-xl px-4 py-2.5 text-sm font-mono text-white focus:outline-none"
-                    />
-                    <p className="text-[10px] font-mono text-slate-500">
-                      Protects your terminal if you walk away from your desk. Required to unlock after 15m inactivity.
-                    </p>
-                  </div>
-                )}
-
-                <div className="pt-2">
-                  <button
-                    disabled={isSubmitting}
-                    onClick={handleAuthorizeSession}
-                    className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 font-mono font-black text-sm uppercase text-white shadow-lg shadow-purple-600/30 active:scale-95 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
-                  >
-                    <Key className="w-4 h-4" />
-                    <span>{isSubmitting ? "SIGNING IN WALLET..." : "AUTHORIZE 1-CLICK (1 SIGNATURE)"}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
-
-      {/* Inactivity Auto-Lock Screen Overlay */}
-      {showUnlockModal && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 z-[10001]">
-          <div className="bg-[#0C0626] border border-amber-500/40 rounded-3xl p-8 max-w-md w-full shadow-[0_0_60px_rgba(251,191,36,0.25)] space-y-6 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-amber-950/80 border border-amber-400/60 flex items-center justify-center mx-auto">
-              <Lock className="w-8 h-8 text-amber-400 animate-pulse" />
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="font-mono font-black text-xl text-white">TERMINAL LOCKED</h3>
-              <p className="text-xs font-mono text-slate-400">Locked due to 15 minutes of inactivity</p>
-            </div>
-
-            <div className="bg-[#070318] p-4 rounded-2xl border border-purple-900/40 text-xs font-mono text-slate-300">
-              Your trading session is paused to prevent unauthorized orders while unattended.
-            </div>
-
-            {activeSession?.pinHash ? (
-              <div className="space-y-3">
-                <input
-                  type="password"
-                  maxLength={6}
-                  value={unlockPinInput}
-                  disabled={Boolean(unlockLockedUntil && Date.now() < unlockLockedUntil)}
-                  onChange={(e) => setUnlockPinInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleUnlockSession(); }}
-                  placeholder="Enter 4-digit Quick-PIN"
-                  className="w-full bg-[#08021C] border border-amber-500/50 focus:border-amber-400 rounded-xl px-4 py-3 text-center text-lg tracking-widest font-mono text-white focus:outline-none disabled:opacity-50"
-                  autoFocus
-                />
-                {unlockError && (
-                  <div className="text-xs font-mono text-rose-400 bg-rose-950/40 border border-rose-500/30 p-2 rounded-lg">{unlockError}</div>
-                )}
-                <button
-                  onClick={handleUnlockSession}
-                  disabled={Boolean(unlockLockedUntil && Date.now() < unlockLockedUntil)}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 font-mono font-bold text-xs uppercase text-black shadow-lg shadow-amber-600/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  UNLOCK TERMINAL
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-xs font-mono text-slate-400">
-                  {activeSession?.storageType === "local" 
-                    ? "24-Hour session without a PIN requires wallet re-authorization to unlock." 
-                    : "Single-window sessions cannot be resumed without wallet re-authorization."}
-                </p>
-                <button
-                  onClick={() => {
-                    handleRevokeSession();
-                    setShowSessionModal(true);
-                  }}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 font-mono font-bold text-xs uppercase text-white shadow-lg shadow-cyan-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
-                >
-                  <Zap className="w-4 h-4" />
-                  <span>RE-AUTHORIZE WITH WALLET</span>
-                </button>
-              </div>
-            )}
-
-            <div className="pt-2 border-t border-purple-900/30">
-              <button
-                onClick={handleRevokeSession}
-                className="text-xs font-mono text-rose-400 hover:text-rose-300 underline"
-              >
-                Revoke Session & Disconnect 1-Click
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Universal Inactivity Terminal Lock Overlay (Standard Wallet Mode) */}
-      {isTerminalLocked && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 z-[10001] font-mono">
-          <div className="bg-[#090B0F] border border-amber-500/40 rounded-xl p-7 max-w-md w-full shadow-[0_0_60px_rgba(251,191,36,0.2)] space-y-5 text-center">
-            <div className="w-14 h-14 rounded-lg bg-amber-950/80 border border-amber-400/50 flex items-center justify-center mx-auto">
-              <Lock className="w-7 h-7 text-amber-400 animate-pulse" />
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-widest">UNATTENDED SCREEN PROTECTION</span>
-              <h3 className="font-bold text-lg text-zinc-100">TERMINAL LOCKED</h3>
-              <p className="text-xs text-zinc-400">Locked to prevent unauthorized trading while away from desk</p>
-            </div>
-
-            <div className="bg-[#060709] p-3.5 rounded-lg border border-white/10 text-xs text-zinc-300 text-left space-y-2">
-              <div className="flex justify-between text-[11px]">
-                <span className="text-zinc-500">Connected Wallet:</span>
-                <span className="text-zinc-200 font-bold tabular-nums">
-                  {walletAddress ? walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4) : "—"}
-                </span>
-              </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-zinc-500">Status:</span>
-                <span className="text-amber-400 font-bold">Trading Inputs Frozen</span>
-              </div>
-              <div className="text-[10px] text-zinc-500 pt-1.5 border-t border-white/[0.06]">
-                Non-Custodial: Funds remain 100% safe inside Monad smart contract vault.
-              </div>
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <button
-                onClick={() => setIsTerminalLocked(false)}
-                className="w-full py-3 rounded border border-amber-500/40 bg-amber-500 hover:bg-amber-400 font-mono font-bold text-xs uppercase tracking-wider text-black shadow-lg shadow-amber-500/20 transition-all active:scale-[0.98]"
-              >
-                RESUME TRADING SESSION
-              </button>
-              <button
-                onClick={() => {
-                  setIsTerminalLocked(false);
-                  handleDisconnectWallet();
-                }}
-                className="w-full py-2 text-xs text-zinc-400 hover:text-rose-400 transition-colors"
-              >
-                Disconnect Wallet
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Session Expired (Inactivity Auto-Wipe) Modal for Single-Window Mode */}
-      {showSessionExpiredModal && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 z-[10001]">
-          <div className="bg-[#0C0626] border border-rose-500/40 rounded-3xl p-8 max-w-md w-full shadow-[0_0_60px_rgba(244,63,94,0.25)] space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 rounded-2xl bg-rose-950/80 border border-rose-400/60 flex items-center justify-center mx-auto shadow-lg shadow-rose-600/30">
-              <ShieldAlert className="w-8 h-8 text-rose-400 animate-pulse" />
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="font-mono font-black text-xl text-white">SESSION EXPIRED</h3>
-              <p className="text-xs font-mono text-rose-400">Auto-wiped due to 15 minutes of inactivity</p>
-            </div>
-
-            <div className="bg-[#070318] p-4 rounded-2xl border border-purple-900/40 text-xs font-mono text-slate-300 leading-relaxed text-left space-y-2">
-              <div className="flex items-center space-x-2 text-rose-300 font-bold">
-                <Lock className="w-3.5 h-3.5" />
-                <span>Zero-Trust Security Triggered</span>
-              </div>
-              <p>
-                Your single-window trading credentials were automatically wiped from memory to prevent unauthorized orders while unattended.
-              </p>
-              <p className="text-slate-400 text-[11px]">
-                No one at this machine can execute trades. To resume popup-free trading, re-authorize with your connected wallet.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                onClick={() => {
-                  setShowSessionExpiredModal(false);
-                  setShowSessionModal(true);
-                }}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 font-mono font-bold text-xs uppercase text-white shadow-lg shadow-cyan-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
-              >
-                <Zap className="w-4 h-4" />
-                <span>RE-ENABLE 1-CLICK TRADING</span>
-              </button>
-
-              <button
-                onClick={() => setShowSessionExpiredModal(false)}
-                className="w-full py-2.5 rounded-xl bg-[#08021C] hover:bg-purple-950/50 border border-purple-500/30 text-purple-300 font-mono text-xs transition-all"
-              >
-                CONTINUE WITH MANUAL CONFIRMATIONS
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Terminal Features & Guide Modal (Institutional Blueprint Specification Dossier) */}
-      {showGuideModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[10000]">
-          <div className="bg-[#0A0D14] border border-[#00E5FF]/30 rounded-xl p-5 sm:p-7 max-w-2xl w-full shadow-[0_25px_70px_rgba(0,229,255,0.08)] space-y-5 relative max-h-[88vh] overflow-y-auto font-mono">
-            {/* Header with Blueprint Cyan Signal Keyline */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-lg border border-[#00E5FF]/40 bg-[#00E5FF]/10 flex items-center justify-center shadow-inner">
-                  <Terminal className="w-4 h-4 text-[#00E5FF]" />
-                </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[10px] text-[#00E5FF] font-bold tracking-widest uppercase">PROTOCOL SPECIFICATION DOSSIER</span>
-                    <span className="text-[10px] text-zinc-500">• MONAD L1</span>
-                  </div>
-                  <h3 className="font-bold text-sm text-zinc-100 tracking-wide">SYSTEM ARCHITECTURE & BENCHMARKS</h3>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowGuideModal(false)}
-                className="p-1.5 rounded-lg border border-white/10 hover:border-rose-500/50 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 transition-colors"
-                title="Close Spec Modal [Esc]"
-              >
-                <XCircle className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Mode Switch Tabs inside Guide (Blueprint Engineering Toggle) */}
-            <div className="flex bg-[#06080E] p-1 rounded-lg border border-white/10 font-mono text-[11px]">
-              <button
-                type="button"
-                onClick={() => setIsPilotMode(true)}
-                className={"flex-1 py-1.5 rounded font-bold transition-all flex items-center justify-center space-x-1.5 " + (
-                  isPilotMode 
-                    ? "bg-amber-950/60 text-amber-300 border border-amber-500/40 shadow-sm" 
-                    : "text-zinc-500 hover:text-zinc-300"
-                )}
-              >
-                <span>PILOT SANDBOX BENCHMARKS</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsPilotMode(false)}
-                className={"flex-1 py-1.5 rounded font-bold transition-all flex items-center justify-center space-x-1.5 " + (
-                  !isPilotMode 
-                    ? "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/40 shadow-sm" 
-                    : "text-zinc-500 hover:text-zinc-300"
-                )}
-              >
-                <span>LIVE TESTNET PROTOCOL</span>
-              </button>
-            </div>
-
-            {/* Feature Cards Grid (Mode-Sensitive) */}
-            <div className="space-y-3 font-mono text-xs">
-              {/* Protocol Spec 00: Live Telemetry Ribbon */}
-              <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-[#CCFF00] font-bold text-[11px]">
-                    <Activity className="w-3.5 h-3.5 text-[#CCFF00]" />
-                    <span>Live Protocol Telemetry Ribbon</span>
-                  </div>
-                  <span className="text-[10px] text-zinc-500">1.0s MONAD CADENCE</span>
-                </div>
-                <p className="text-zinc-400 leading-relaxed text-[11px]">
-                  Direct hardware-level telemetry synced with Monad Testnet block height. Displays continuous 1.0s epoch ticks, &lt;380ms Pyth Hermes sub-second oracle latency, 10,000 TPS peak network capacity, and live simulated gas consumption ($0.000042/tx).
-                </p>
-              </div>
-
-              {isPilotMode ? (
-                <>
-                  {/* Sandbox Feature 1: Volatility & Liquidation Stress Tester */}
-                  <div className="bg-[#08090C] p-3.5 rounded border border-amber-500/30 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2 text-amber-300 font-bold text-[11px]">
-                        <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Volatility & Liquidation Stress Engine</span>
-                      </div>
-                      <span className="text-[9px] bg-amber-950/60 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/30">JUDGE TOOLKIT</span>
-                    </div>
-                    <p className="text-zinc-400 leading-relaxed text-[11px]">
-                      Interactive risk simulation engine: Open any position and click <strong className="text-amber-300">STRESS TEST MMR</strong>. Shift Pyth oracle prices ±40% dynamically, watch the Margin Health Bar turn green to red, and trigger simulated keeper liquidations to observe bad-debt insolvency barriers.
-                    </p>
-                    <div className="text-[10px] text-amber-400/90 bg-amber-950/30 px-2 py-1 rounded border border-amber-500/20">
-                      ✓ Instant Sandbox Demo: Zero real MON at risk; test liquidation edge-cases on demand.
-                    </div>
-                  </div>
-
-                  {/* Sandbox Feature 2: 1,000 MON Pilot Wallet */}
-                  <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                    <div className="flex items-center space-x-2 text-zinc-300 font-bold text-[11px]">
-                      <Wallet className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>1,000 MON Virtual Sandbox Margin</span>
-                    </div>
-                    <p className="text-zinc-400 leading-relaxed text-[11px]">
-                      No MetaMask or testnet faucet needed. Enjoy instant trading with 1,000 virtual MON margin, persistent browser localStorage accounting, and full isolated margin leverage up to 50x.
-                    </p>
-                  </div>
-
-                  {/* Sandbox Feature 3: EVM Feasibility Matrix */}
-                  <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                    <div className="flex items-center space-x-2 text-cyan-300 font-bold text-[11px]">
-                      <Gauge className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>EVM Architectural Cost & Feasibility Matrix</span>
-                    </div>
-                    <p className="text-zinc-400 leading-relaxed text-[11px]">
-                      Comparative gas economics: Ethereum L1 costs $14,400/day for 86,400 per-block keeper updates; Arbitrum costs $480/day. Monad parallel execution costs &lt;$0.05/day, enabling true onchain block-by-block funding.
-                    </p>
-                  </div>
-
-                  {/* Sandbox Feature 4: 1-Click Balance Refill & % Sizing Pills */}
-                  <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                    <div className="flex items-center space-x-2 text-emerald-300 font-bold text-[11px]">
-                      <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Instant Refill & Preset Sizing Matrix</span>
-                    </div>
-                    <p className="text-zinc-400 leading-relaxed text-[11px]">
-                      Depleted your margin during stress testing? Click <strong className="text-emerald-300">REFILL</strong> in the balance pill to instantly restore 1,000 MON. Use 25% / 50% / 75% / MAX buttons for instant order sizing.
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Testnet Feature 1: 1-Click Session Keys */}
-                  <div className="bg-[#08090C] p-3.5 rounded border border-[#CCFF00]/30 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2 text-[#CCFF00] font-bold text-[11px]">
-                        <Zap className="w-3.5 h-3.5 text-[#CCFF00]" />
-                        <span>1-Click Trading (EIP-712 Session Keys)</span>
-                      </div>
-                      <span className="text-[9px] bg-[#CCFF00]/10 text-[#CCFF00] px-1.5 py-0.5 rounded border border-[#CCFF00]/30">0 POPUPS</span>
-                    </div>
-                    <p className="text-zinc-400 leading-relaxed text-[11px]">
-                      Tired of confirming every market order in MetaMask? Click <strong className="text-[#CCFF00]">ENABLE 1-CLICK</strong> in the Perp Cockpit. Sign once with your wallet to grant an ephemeral in-memory session key. Execute trades in sub-50ms with zero popups!
-                    </p>
-                    <div className="text-[10px] text-emerald-400/90 bg-emerald-950/30 px-2 py-1 rounded border border-emerald-500/20">
-                      ✓ Non-Custodial: Session keys cannot transfer or withdraw funds.
-                    </div>
-                  </div>
-
-                  {/* Testnet Feature 2: 24-Hour Quick-PIN Protection */}
-                  <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                    <div className="flex items-center space-x-2 text-zinc-300 font-bold text-[11px]">
-                      <Lock className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>24-Hour Quick-PIN Persistence & Auto-Lock</span>
-                    </div>
-                    <p className="text-zinc-400 leading-relaxed text-[11px]">
-                      Choose <strong className="text-zinc-200">Remember for 24 Hours</strong> and set a 4-digit PIN. Your session survives browser reloads. If you walk away for 15 minutes, the terminal auto-locks to protect your keys until you re-enter your PIN.
-                    </p>
-                  </div>
-
-                  {/* Testnet Feature 3: Onchain Position Recovery */}
-                  <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                    <div className="flex items-center space-x-2 text-emerald-300 font-bold text-[11px]">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>On-Chain Position State Hydration</span>
-                    </div>
-                    <p className="text-zinc-400 leading-relaxed text-[11px]">
-                      All live trades are written to Monad Testnet contracts (<code className="text-zinc-300">FluxMarket.sol</code>). On browser reload, your active position is automatically recovered directly from contract storage.
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {/* Shared Feature: Smart Bracket Order (TP/SL) */}
-              <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                <div className="flex items-center space-x-2 text-zinc-200 font-bold text-[11px]">
-                  <Sliders className="w-3.5 h-3.5 text-[#00E5FF]" />
-                  <span>Smart Bracket Orders (TP / SL)</span>
-                </div>
-                <p className="text-zinc-400 leading-relaxed text-[11px]">
-                  Institutional risk management: set Take Profit (TP) and Stop Loss (SL) triggers with real-time risk/reward ratio calculation and visual target badges directly in the Order Cockpit.
-                </p>
-              </div>
-
-              {/* Shared Foundation Feature: High-Frequency Hotkeys */}
-              <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                <div className="flex items-center space-x-2 text-amber-300 font-bold text-[11px]">
-                  <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                  <span>High-Frequency Hotkey Execution</span>
-                </div>
-                <p className="text-zinc-400 leading-relaxed text-[11px]">
-                  Zero-latency keyboard shortcuts for scalping: Press <strong className="text-emerald-400">B</strong> to Buy / Long, <strong className="text-rose-400">S</strong> to Sell / Short, <strong className="text-amber-400">C</strong> to Close & Settle, and <strong className="text-[#CCFF00]">1</strong> to toggle 1-Click Trading.
-                </p>
-              </div>
-
-              {/* Shared Foundation Feature: 16-Shard Parallel EVM & Live Matrix */}
-              <div className="bg-[#08090C] p-3.5 rounded border border-[#00E5FF]/20 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-[#00E5FF] font-bold text-[11px]">
-                    <Cpu className="w-3.5 h-3.5 text-[#00E5FF]" />
-                    <span>16-Shard Block-STM Parallel Storage Matrix</span>
-                  </div>
-                  <span className="text-[9px] bg-[#00E5FF]/10 text-[#00E5FF] px-1.5 py-0.5 rounded border border-[#00E5FF]/30 font-bold">15.4× THROUGHPUT</span>
-                </div>
-                <p className="text-zinc-400 leading-relaxed text-[11px]">
-                  FluxState splits open interest and balances across 16 independent EVM storage slots (<code className="text-zinc-300">keccak256(shardId, 0x05)</code>). The matrix automatically highlights your assigned storage slot, delivers a measured <strong className="text-[#00E5FF]">15.4× throughput multiplier</strong> over serial DEXes, eliminates global state lockups, and features a one-click 500-Trade Parallel Benchmark.
-                </p>
-              </div>
-
-              {/* Shared Foundation Feature: Block Stream Funding Taximeter */}
-              <div className="bg-[#08090C] p-3.5 rounded border border-white/10 space-y-1.5">
-                <div className="flex items-center space-x-2 text-cyan-300 font-bold text-[11px]">
-                  <Gauge className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Continuous Block-by-Block Funding Accumulator</span>
-                </div>
-                <p className="text-zinc-400 leading-relaxed text-[11px]">
-                  Every 1.0s Monad block checkpoint, funding dynamically accrues and settles via an O(1) lazy index. The Active Position HUD features a live funding stream breakdown with the <strong className="text-cyan-300">1-SEC FUNDING APPLIED</strong> badge and real-time micro-funding accrual counter.
-                </p>
-              </div>
-
-              {/* Verified On-Chain Deployments Table */}
-              <div className="bg-[#08090C] p-3.5 rounded border border-[#836EF9]/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-[#836EF9] font-bold text-[11px]">
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#836EF9]" />
-                    <span>Verified Smart Contracts • Monad Testnet (10143)</span>
-                  </div>
-                  <span className="text-[9px] bg-[#836EF9]/15 text-[#836EF9] px-1.5 py-0.5 rounded border border-[#836EF9]/30 font-bold">MONADSCAN VERIFIED</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] pt-1">
-                  <a 
-                    href="https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="p-2 rounded bg-white/[0.02] border border-white/10 hover:border-[#836EF9]/60 hover:bg-[#836EF9]/10 transition-colors flex justify-between items-center group"
-                  >
-                    <div>
-                      <div className="text-zinc-300 font-bold">FluxMarket (16 Shards)</div>
-                      <div className="text-zinc-500 font-mono text-[9px]">0xD822...DcC5</div>
-                    </div>
-                    <ExternalLink className="w-3 h-3 text-zinc-500 group-hover:text-[#836EF9]" />
-                  </a>
-                  <a 
-                    href="https://testnet.monadscan.com/address/0x5047f8d761dcE6edf7b2171b123e0A758056d914" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="p-2 rounded bg-white/[0.02] border border-white/10 hover:border-[#836EF9]/60 hover:bg-[#836EF9]/10 transition-colors flex justify-between items-center group"
-                  >
-                    <div>
-                      <div className="text-zinc-300 font-bold">FluxVault (LP & Insurance)</div>
-                      <div className="text-zinc-500 font-mono text-[9px]">0x5047...d914</div>
-                    </div>
-                    <ExternalLink className="w-3 h-3 text-zinc-500 group-hover:text-[#836EF9]" />
-                  </a>
-                  <a 
-                    href="https://testnet.monadscan.com/address/0xBF76d0d245fED0C1279c6719cBe27635805533B2" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="p-2 rounded bg-white/[0.02] border border-white/10 hover:border-[#836EF9]/60 hover:bg-[#836EF9]/10 transition-colors flex justify-between items-center group"
-                  >
-                    <div>
-                      <div className="text-zinc-300 font-bold">FluxFundingEngine</div>
-                      <div className="text-zinc-500 font-mono text-[9px]">0xBF76...33B2</div>
-                    </div>
-                    <ExternalLink className="w-3 h-3 text-zinc-500 group-hover:text-[#836EF9]" />
-                  </a>
-                  <a 
-                    href="https://testnet.monadscan.com/address/0xc547C6f06495690cEd525EDd8Eaf4C17484b0C39" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="p-2 rounded bg-white/[0.02] border border-white/10 hover:border-[#836EF9]/60 hover:bg-[#836EF9]/10 transition-colors flex justify-between items-center group"
-                  >
-                    <div>
-                      <div className="text-zinc-300 font-bold">Pyth Oracle Hermes</div>
-                      <div className="text-zinc-500 font-mono text-[9px]">0xc547...0C39</div>
-                    </div>
-                    <ExternalLink className="w-3 h-3 text-zinc-500 group-hover:text-[#836EF9]" />
-                  </a>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Close Button */}
-            <div className="pt-2 border-t border-white/10">
-              <button
-                onClick={() => setShowGuideModal(false)}
-                className="w-full py-2.5 rounded-lg border border-[#00E5FF]/40 bg-[#00E5FF] hover:bg-[#00cbe5] text-black font-mono font-black text-xs uppercase tracking-wider transition-all active:scale-[0.98] shadow-lg shadow-[#00E5FF]/20"
-              >
-                ACKNOWLEDGE & RETURN TO TERMINAL
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Institutional PnL Settlement Slip Modal (Institutional / Hyperliquid Style Proof of Settlement) */}
-      {selectedSlipTrade && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[10002]">
-          <div className="bg-[#0C0E15] border border-white/20 rounded-2xl max-w-md w-full shadow-[0_20px_60px_rgba(0,0,0,0.9)] overflow-hidden font-mono animate-in fade-in zoom-in-95 duration-150">
-            {/* Header with Monad L1 Verification Chip */}
-            <div className="p-5 border-b border-white/[0.08] flex items-center justify-between bg-[#11131C]">
-              <div className="flex items-center space-x-2.5">
-                <div className="p-2 rounded bg-white/5 border border-white/10">
-                  <FileText className="w-4 h-4 text-[#CCFF00]" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                    INSTITUTIONAL SETTLEMENT SLIP
-                  </h3>
-                  <div className="text-[10px] text-slate-400">
-                    FLUXSTATE PROTOCOL • MONAD L1 (10143)
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedSlipTrade(null);
-                  setCopiedSlip(false);
-                }}
-                className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/5 transition-colors"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Slip Body */}
-            <div className="p-5 space-y-4 text-xs">
-              {/* Highlight Result Card */}
-              <div className={"p-4 rounded-xl border text-center " + (
-                selectedSlipTrade.isWin 
-                  ? "bg-emerald-950/20 border-emerald-500/40 text-emerald-400" 
-                  : "bg-rose-950/20 border-rose-500/40 text-rose-400"
-              )}>
-                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">
-                  NET SETTLED RETURN (PnL)
-                </div>
-                <div className="text-2xl font-bold tabular-nums">
-                  {(selectedSlipTrade.pnl >= 0 ? "+" : "") + selectedSlipTrade.pnl} MON
-                </div>
-                <div className="text-xs font-bold mt-0.5">
-                  {selectedSlipTrade.pnlPercent}
-                </div>
-              </div>
-
-              {/* Execution Specs Grid */}
-              <div className="bg-[#141722] rounded-xl p-3.5 space-y-2 border border-white/[0.06] text-[11px]">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Instrument:</span>
-                  <strong className="text-white">MON-PERP / USD</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Position Type:</span>
-                  <span className={"font-bold px-1.5 py-0.2 rounded " + (
-                    selectedSlipTrade.type === "LONG" 
-                      ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
-                      : "text-rose-400 bg-rose-950/40 border border-rose-500/30"
-                  )}>
-                    {selectedSlipTrade.type} {selectedSlipTrade.leverage}x
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Epoch ID:</span>
-                  <span className="text-slate-200 tabular-nums">#{selectedSlipTrade.id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Entry Price:</span>
-                  <span className="text-white font-mono tabular-nums">${selectedSlipTrade.entryPrice?.toFixed(4)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Exit Price:</span>
-                  <span className="text-white font-mono tabular-nums">${selectedSlipTrade.exitPrice?.toFixed(4)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Collateral Margin:</span>
-                  <span className="text-slate-200 tabular-nums">{selectedSlipTrade.margin} MON</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Accrued Continuous Funding:</span>
-                  <span className={"tabular-nums font-bold " + (
-                    selectedSlipTrade.funding > 0 ? "text-emerald-400" : "text-rose-400"
-                  )}>
-                    {selectedSlipTrade.funding ? `${selectedSlipTrade.funding > 0 ? "+" : ""}${selectedSlipTrade.funding} MON` : "Settled (1.0s Rate)"}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-1 border-t border-white/[0.06]">
-                  <span className="text-slate-400">Settlement Finality:</span>
-                  <span className="text-[#00FF66] font-bold">1.0s Monad Block Finality</span>
-                </div>
-              </div>
-
-              {/* MonadScan Verification Explorer Link & Hash */}
-              <div className="bg-[#11131C] p-3 rounded-lg border border-white/[0.06] text-[10px] space-y-1">
-                <div className="text-slate-400">Cryptographic Verification:</div>
-                <div className="flex justify-between items-center text-slate-300">
-                  <span className="font-mono">{selectedSlipTrade.txHash ? `${selectedSlipTrade.txHash.slice(0, 14)}...${selectedSlipTrade.txHash.slice(-8)}` : `Simulated Monad Tx: 0x${Math.abs(selectedSlipTrade.id * 17921).toString(16)}...`}</span>
-                  <a
-                    href={selectedSlipTrade.txHash ? `https://testnet.monadscan.com/tx/${selectedSlipTrade.txHash}` : `https://testnet.monadscan.com/address/${CONTRACT_ADDRESSES.market}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[#CCFF00] hover:underline flex items-center gap-1 font-bold"
-                  >
-                    <span>{selectedSlipTrade.txHash ? "View Tx" : "MonadScan"}</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
-
-              {/* Action Buttons: Copy Proof Slip & Close */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const slipText = `FLUXSTATE SETTLEMENT SLIP\n-------------------------\nInstrument: MON-PERP (${selectedSlipTrade.type} ${selectedSlipTrade.leverage}x)\nEntry: $${selectedSlipTrade.entryPrice?.toFixed(4)} | Exit: $${selectedSlipTrade.exitPrice?.toFixed(4)}\nNet PnL: ${selectedSlipTrade.pnl >= 0 ? "+" : ""}${selectedSlipTrade.pnl} MON (${selectedSlipTrade.pnlPercent})\nSettlement: Continuous 1-Sec Block Funding\nNetwork: Monad L1 Testnet (Chain ID 10143)\nContract: 0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5`;
-                    navigator.clipboard.writeText(slipText);
-                    setCopiedSlip(true);
-                    setTimeout(() => setCopiedSlip(false), 3000);
-                  }}
-                  className="py-2.5 rounded bg-white/5 hover:bg-white/10 border border-white/20 text-white font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
-                >
-                  {copiedSlip ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-[#00FF66]" />
-                      <span className="text-[#00FF66]">COPIED!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Share2 className="w-3.5 h-3.5 text-[#CCFF00]" />
-                      <span>SHARE SLIP</span>
-                    </>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedSlipTrade(null);
-                    setCopiedSlip(false);
-                  }}
-                  className="py-2.5 rounded bg-[#CCFF00] hover:bg-[#b8e600] text-black font-black uppercase transition-colors cursor-pointer"
-                >
-                  DONE
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* S-Tier Mathematical Formula Inspector Modal (Continuous Funding Integral Verification) */}
-      {showMathModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#090A0F] border border-white/20 rounded-2xl max-w-2xl w-full p-6 text-zinc-200 font-mono shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div className="flex items-center space-x-2 text-[#CCFF00]">
-                <Zap className="w-5 h-5 text-[#CCFF00]" />
-                <h3 className="text-sm font-black uppercase tracking-wider text-white">Continuous Funding Mathematical Engine</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowMathModal(false)}
-                className="text-zinc-400 hover:text-white p-1 rounded hover:bg-white/10 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs leading-relaxed">
-              <p className="text-zinc-300">
-                Unlike legacy perpetual DEXs on Ethereum or Arbitrum which apply coarse 1-hour or 8-hour discrete funding lumps, <strong>FluxState</strong> executes a continuous mathematical integral updated on every 1-second Monad block:
-              </p>
-
-              {/* Formula Display Box */}
-              <div className="bg-black/60 border border-[#CCFF00]/30 rounded-xl p-4 text-center space-y-2">
-                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Continuous Funding Integral Form</div>
-                <div className="text-base font-black text-[#CCFF00] font-mono tracking-wide py-1">
-                  F(t) = ∫ [ (OI_long - OI_short) / max(OI_total, $50,000) ] × BaseRate · dt
-                </div>
-                <div className="text-[10px] text-zinc-400">
-                  Discretized on Monad into exact 1-second block state increments (dt = 1s, Bounded |ΔF| ≤ 0.05% / block)
-                </div>
-              </div>
-
-              {/* Live Parameters Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2">
-                <div className="bg-white/[0.03] border border-white/10 p-2.5 rounded-lg">
-                  <div className="text-[10px] text-zinc-500 font-bold uppercase">Mark Price (Pyth)</div>
-                  <div className="text-sm font-black text-white tabular-nums">${monPrice.toFixed(4)}</div>
-                  <div className="text-[9px] text-[#00F279]">Sub-380ms Hermes Feed</div>
-                </div>
-
-                <div className="bg-white/[0.03] border border-white/10 p-2.5 rounded-lg">
-                  <div className="text-[10px] text-zinc-500 font-bold uppercase">Virtual OI Floor</div>
-                  <div className="text-sm font-black text-[#CCFF00] tabular-nums">50,000 MON</div>
-                  <div className="text-[9px] text-zinc-400">Zero-Division Immunity</div>
-                </div>
-
-                <div className="bg-white/[0.03] border border-white/10 p-2.5 rounded-lg">
-                  <div className="text-[10px] text-zinc-500 font-bold uppercase">Cadence & Gas</div>
-                  <div className="text-sm font-black text-[#00F279] tabular-nums">1.0s / &lt; $0.0001</div>
-                  <div className="text-[9px] text-zinc-400">&lt; $0.05 / day total overhead</div>
-                </div>
-              </div>
-
-              {/* Economic Inevitability Table */}
-              <div className="bg-white/[0.02] border border-white/10 rounded-xl p-3 space-y-1.5 text-[11px]">
-                <div className="font-bold text-white flex justify-between">
-                  <span>Economic Inevitability on Monad:</span>
-                  <span className="text-[#00F279]">86,400 Updates / Day</span>
-                </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>Ethereum L1 (86.4k checkpoints @ 70k gas):</span>
-                  <span className="text-rose-400 font-bold">~$14,400 / day (Impossible)</span>
-                </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>Arbitrum One (Hourly funding fallback):</span>
-                  <span className="text-amber-400 font-bold">~$480 / day (Coarse Lag)</span>
-                </div>
-                <div className="flex justify-between text-zinc-200 font-bold border-t border-white/10 pt-1">
-                  <span>Monad Metropolis (1s Continuous Integral):</span>
-                  <span className="text-[#00F279]">&lt; $0.05 / day (⚡ Native EVM Fit)</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowMathModal(false)}
-                className="px-5 py-2 rounded-lg bg-[#CCFF00] hover:bg-[#b8e600] text-black font-black uppercase text-xs transition-colors cursor-pointer"
-              >
-                ACKNOWLEDGE & CLOSE
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Mathematical Formula Inspector Modal */}
+      <MathFormulaModal
+        show={showMathModal}
+        onClose={() => setShowMathModal(false)}
+        monPrice={monPrice}
+      />
     </div>
   );
 }
