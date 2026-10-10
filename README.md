@@ -11,7 +11,7 @@
 **Monad Metropolis Global Hackathon — Track 01: Onchain Finance & Trading**  
 *Challenge: "Perpetuals with funding that updates every block"*
 
-[🚀 Live Trading Terminal](https://fluxstate.vercel.app) • [📖 Contract Audit](https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5) • [⚡ 500-Order Parallel Benchmark](#-parallel-block-stm-benchmark)
+[🚀 Live Trading Terminal](https://fluxstate.vercel.app) • [🎬 Video Demo](https://youtu.be/MS5M6ULlc7U) • [📖 Contract Audit](https://testnet.monadscan.com/address/0xD822AA6f187dC05c5e95b34E4FBEDCEbBEBcDcC5) • [⚡ 500-Order Parallel Benchmark](#-parallel-block-stm-benchmark)
 
 </div>
 
@@ -75,6 +75,27 @@ Legacy perps (dYdX, GMX) recalculate funding only once every **1 to 8 hours** du
 | **Daily Keeper Gas Overhead** | ~$14,400 / day | ~$480 / day | **< $0.05 / day (⚡ Native Fit)** |
 | **Storage Collision in Block-STM** | N/A (Sequential) | N/A (Sequential) | **0.00% Aborts (16 Shards)** |
 | **Funding Settlement Precision** | Discrete Coarse Epochs | Periodic Lags | **Continuous Mathematical Integral** |
+
+---
+
+## 💰 Protocol Unit Economics & Keeper Sustainability
+
+A common question in automated high-frequency DeFi is: *who pays for the autonomous keeper calling `checkpointFundingRate()` every 3 seconds?*
+
+FluxState is architected with a self-sustaining autonomous flywheel that is profitable from day one:
+
+| Metric | Monad L1 Reality | Protocol Financials |
+| :--- | :--- | :--- |
+| **Protocol Trading Fee** | `0.08%` (8 bps) | Collected on notional position open/close |
+| **Keeper Gas Cost** | `< $0.0001 per checkpoint` | Enabled by Monad's parallel pipelining |
+| **Checkpoint Cadence** | Every 3s (~28,800/day) | Total Keeper Cost: ~$2.88 / day |
+| **Breakeven Daily Volume** | ~$3,600 notional volume | 1 single retail trade covers daily keeper gas |
+| **At $1M Daily Volume** | $800 Daily Fee Revenue | **$797.12 / day Net Protocol Profit** |
+
+### 🔄 The Self-Sustaining Autonomous Flywheel:
+1. **Fee Inflow**: 0.08% volume fee accrues directly to `FluxVault.sol`.
+2. **Keeper Reimbursement**: A fractional micro-allocation (0.01% of volume) reimburses the autonomous keeper bot.
+3. **LP Compounding**: The remaining 87.5% of protocol revenue directly compounds liquidity provider (LP) yield and the bad-debt insurance fund.
 
 ---
 

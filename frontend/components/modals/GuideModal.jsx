@@ -236,6 +236,20 @@ export function GuideModal({
             </p>
           </div>
 
+          {/* Protocol Unit Economics & Autonomous Flywheel */}
+          <div className="bg-[#08090C] p-3.5 rounded border border-[#00F279]/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-[#00F279] font-bold text-[11px]">
+                <RefreshCw className="w-3.5 h-3.5 text-[#00F279]" />
+                <span>Protocol Unit Economics & Autonomous Flywheel</span>
+              </div>
+              <span className="text-[9px] bg-[#00F279]/15 text-[#00F279] px-1.5 py-0.5 rounded border border-[#00F279]/30 font-bold">PROFITABLE AT $3.6K VOL</span>
+            </div>
+            <p className="text-zinc-400 leading-relaxed text-[11px]">
+              The autonomous keeper daemon pulses every 3 seconds for &lt; $0.0001 gas (~$2.88/day on Monad). Funded seamlessly by the protocol's 0.08% trading fee: just <strong>$3,600 daily volume</strong> covers all background keeper operations, while at $1M volume the protocol yields <strong>$797.12/day net profit</strong> directly compounding LP reserves.
+            </p>
+          </div>
+
           {/* Verified On-Chain Deployments Table */}
           <div className="bg-[#08090C] p-3.5 rounded border border-[#836EF9]/30 space-y-2">
             <div className="flex items-center justify-between">
