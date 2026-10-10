@@ -561,11 +561,13 @@ export default function FluxGamingTerminal() {
 
       // Hydrate sandbox history
       const savedSandHist = localStorage.getItem("flux_sandbox_history");
-      if (savedSandHist) {
+      if (savedSandHist !== null) {
         try {
           const parsed = JSON.parse(savedSandHist);
           if (Array.isArray(parsed)) setSandboxHistory(parsed);
-        } catch (e) {}
+        } catch (e) {
+          setSandboxHistory([]);
+        }
       } else {
         setSandboxHistory(defaultHistory);
       }
@@ -1926,15 +1928,19 @@ export default function FluxGamingTerminal() {
                   onClick={() => {
                     if (isPilotMode) {
                       setSandboxHistory([]);
-                      localStorage.removeItem("flux_sandbox_history");
+                      if (typeof window !== "undefined") {
+                        localStorage.setItem("flux_sandbox_history", JSON.stringify([]));
+                      }
                     } else {
                       setTestnetHistory([]);
-                      localStorage.removeItem("flux_testnet_history");
+                      if (typeof window !== "undefined") {
+                        localStorage.setItem("flux_testnet_history", JSON.stringify([]));
+                      }
                     }
                     setTxToast({
                       title: "LEDGER CACHE RESET",
                       amount: "History Cleared",
-                      detail: "Local trade table reset. New trades will log fresh onchain records.",
+                      detail: "Local trade table reset. New trades will log fresh records.",
                       type: "CLOSE",
                       isWin: false
                     });
