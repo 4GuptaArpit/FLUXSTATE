@@ -62,52 +62,60 @@ export function OrderCockpit({
             </div>
           </div>
           
-          {/* 1-Click Session Key Interactive Switch */}
-          <button
-            type="button"
-            onClick={handleToggle1Click}
-            className={"group flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-[11px] font-mono cursor-pointer transition-all duration-300 " + (
-              is1ClickTrading 
-                ? (activeSession?.isLocked 
-                    ? "bg-[#FFB800]/10 border-[#FFB800] text-[#FFB800] shadow-[0_0_15px_rgba(255,184,0,0.25)]"
-                    : "bg-[#00E5FF]/10 border-[#00E5FF] text-[#00E5FF] shadow-[0_0_18px_rgba(0,229,255,0.25)]") 
-                : "bg-white/[0.03] border-white/10 text-zinc-300 hover:border-[#CCFF00]/60 hover:text-white"
-            )}
-            title={is1ClickTrading 
-              ? (activeSession?.isLocked 
-                  ? "Session Key Locked: Click to unlock with PIN" 
-                  : (isPilotMode 
-                      ? "1-Click Active (Sandbox): 0 MetaMask popups enabled" 
-                      : "1-Click Active (Testnet): Session key active for Monad L1 trades")) 
-              : "Enable 1-Click Trading Session Key"}
-          >
-            {is1ClickTrading ? (
-              activeSession?.isLocked ? (
-                <Lock className="w-3.5 h-3.5 text-[#FFB800] animate-pulse" />
-              ) : (
-                <Zap className="w-3.5 h-3.5 text-[#00E5FF] animate-pulse" />
-              )
-            ) : (
-              <Zap className="w-3.5 h-3.5 text-[#CCFF00] group-hover:scale-110 transition-transform" />
-            )}
-
-            <span className="font-black tracking-tight text-[10px]">
-              {is1ClickTrading 
-                ? (activeSession?.isLocked ? "LOCKED" : "1-CLICK ON") 
-                : "1-CLICK"}
-            </span>
-
-            {/* Visual Toggle Pill Indicator */}
-            <div className={"w-7 h-3.5 rounded-full p-0.5 flex items-center transition-colors duration-300 " + (
-              is1ClickTrading
-                ? (activeSession?.isLocked ? "bg-[#FFB800] justify-end" : "bg-[#00E5FF] justify-end")
-                : "bg-white/10 justify-start group-hover:bg-white/20"
-            )}>
-              <div className={"w-2.5 h-2.5 rounded-full bg-black shadow-md transform transition-transform duration-300 " + (
-                is1ClickTrading ? "scale-100" : "scale-90 bg-zinc-400"
-              )} />
+          {/* In Judge Pilot mode, execution is already instant without signatures. In Testnet mode, show the 1-Click Session Key switch */}
+          {isPilotMode ? (
+            <div 
+              className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl border border-[#CCFF00]/30 bg-[#CCFF00]/10 text-[#CCFF00] font-mono text-[10px] font-black select-none"
+              title="In Judge Pilot Sandbox, all trades execute with instant sub-second finality without wallet popups"
+            >
+              <Zap className="w-3 h-3 text-[#CCFF00]" />
+              <span>INSTANT PILOT</span>
             </div>
-          </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleToggle1Click}
+              className={"group flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-[11px] font-mono cursor-pointer transition-all duration-300 " + (
+                is1ClickTrading 
+                  ? (activeSession?.isLocked 
+                      ? "bg-[#FFB800]/10 border-[#FFB800] text-[#FFB800] shadow-[0_0_15px_rgba(255,184,0,0.25)]"
+                      : "bg-[#00E5FF]/10 border-[#00E5FF] text-[#00E5FF] shadow-[0_0_18px_rgba(0,229,255,0.25)]") 
+                  : "bg-white/[0.03] border-white/10 text-zinc-300 hover:border-[#CCFF00]/60 hover:text-white"
+              )}
+              title={is1ClickTrading 
+                ? (activeSession?.isLocked 
+                    ? "Session Key Locked: Click to unlock with PIN" 
+                    : "1-Click Active (Testnet): Session key active for Monad L1 trades") 
+                : "Enable 1-Click Trading Session Key"}
+            >
+              {is1ClickTrading ? (
+                activeSession?.isLocked ? (
+                  <Lock className="w-3.5 h-3.5 text-[#FFB800] animate-pulse" />
+                ) : (
+                  <Zap className="w-3.5 h-3.5 text-[#00E5FF] animate-pulse" />
+                )
+              ) : (
+                <Zap className="w-3.5 h-3.5 text-[#CCFF00] group-hover:scale-110 transition-transform" />
+              )}
+
+              <span className="font-black tracking-tight text-[10px]">
+                {is1ClickTrading 
+                  ? (activeSession?.isLocked ? "LOCKED" : "1-CLICK ON") 
+                  : "1-CLICK"}
+              </span>
+
+              {/* Visual Toggle Pill Indicator */}
+              <div className={"w-7 h-3.5 rounded-full p-0.5 flex items-center transition-colors duration-300 " + (
+                is1ClickTrading
+                  ? (activeSession?.isLocked ? "bg-[#FFB800] justify-end" : "bg-[#00E5FF] justify-end")
+                  : "bg-white/10 justify-start group-hover:bg-white/20"
+              )}>
+                <div className={"w-2.5 h-2.5 rounded-full bg-black shadow-md transform transition-transform duration-300 " + (
+                  is1ClickTrading ? "scale-100" : "scale-90 bg-zinc-400"
+                )} />
+              </div>
+            </button>
+          )}
         </div>
 
         {/* Collateral Input with Custom Steppers */}
