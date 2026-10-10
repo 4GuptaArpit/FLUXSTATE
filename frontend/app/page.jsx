@@ -471,15 +471,18 @@ export default function FluxGamingTerminal() {
   useEffect(() => {
     if (!walletAddress || isPilotMode) return;
 
-    // Immediate initial sync
+    // Initial onchain sync on wallet connect
     fetchRealBalance(walletAddress);
 
     const syncInterval = setInterval(() => {
-      fetchRealBalance(walletAddress);
+      // In 1-Click mode or during an open position, do not clobber session balance with stale RPC data
+      if (!is1ClickTrading && !activePosition) {
+        fetchRealBalance(walletAddress);
+      }
     }, 3000);
 
     return () => clearInterval(syncInterval);
-  }, [walletAddress, isPilotMode]);
+  }, [walletAddress, isPilotMode, is1ClickTrading, activePosition]);
 
   // Helper to persist updated trading margin balance per mode
   const updateTradingBalance = (newBal) => {
